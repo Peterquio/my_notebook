@@ -1,12 +1,12 @@
 from ui.widgets.base_screen import BaseScreen
 
 
-class FinanceHome(BaseScreen):
+class CalendarHome(BaseScreen):
     def __init__(self, master):
         super().__init__(
             master,
-            title="Financeiro",
-            subtitle="Controle suas receitas, despesas, cartões e categorias.",
+            title="Calendário",
+            subtitle="Visualize eventos, datas importantes e sua agenda.",
         )
 
         self._criar_widgets()
