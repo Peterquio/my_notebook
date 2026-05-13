@@ -1,5 +1,4 @@
-from PySide6.QtWidgets import QWidget, QGridLayout
-
+from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea
 
 class DashboardGrid(QWidget):
     def __init__(
@@ -52,7 +51,7 @@ class DashboardGrid(QWidget):
         parent_width = self.parentWidget().width() if self.parentWidget() else self.width()
 
         available_width = max(
-            parent_width,
+            self._get_available_width(),
             self.min_cell_width,
         )
 
@@ -89,9 +88,11 @@ class DashboardGrid(QWidget):
             )
 
             if hasattr(widget, "set_base_size"):
+                scale = getattr(widget, "scale", 1)
+
                 widget.set_base_size(
-                    real_width,
-                    real_height,
+                    int(real_width / scale),
+                    int(real_height / scale),
                 )
 
             self.layout.addWidget(
@@ -108,6 +109,17 @@ class DashboardGrid(QWidget):
                 width_units,
                 height_units,
             )
+
+    def _get_available_width(self) -> int:
+        parent = self.parentWidget()
+
+        while parent is not None:
+            if isinstance(parent, QScrollArea):
+                return parent.viewport().width()
+
+            parent = parent.parentWidget()
+
+        return self.width()
 
     def _calculate_columns(
             self,
