@@ -13,21 +13,10 @@ class CardSlot(QFrame):
         super().__init__()
 
         self.card = card
+        self.scale = scale
         self.edit_mode = False
 
-        self.default_width = width
-        self.default_height = height
-
-        self.hover_width = int(width * scale)
-        self.hover_height = int(height * scale)
-
-        self.setFixedSize(
-            self.hover_width,
-            self.hover_height,
-        )
-
         self.card.setParent(self)
-        self.card.setGeometry(self._default_geometry())
 
         self.animation = QPropertyAnimation(
             self.card,
@@ -36,6 +25,33 @@ class CardSlot(QFrame):
 
         self.animation.setDuration(130)
         self.animation.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.set_base_size(width, height)
+
+    def set_base_size(
+        self,
+        width: int,
+        height: int,
+    ) -> None:
+        self.default_width = width
+        self.default_height = height
+
+        self.hover_width = int(width * self.scale)
+        self.hover_height = int(height * self.scale)
+
+        self.setFixedSize(
+            self.hover_width,
+            self.hover_height,
+        )
+
+        self.card.setFixedSize(
+            self.default_width,
+            self.default_height,
+        )
+
+        self.card.setGeometry(
+            self._default_geometry()
+        )
 
     def _default_geometry(self) -> QRect:
         x = (self.hover_width - self.default_width) // 2
@@ -56,7 +72,18 @@ class CardSlot(QFrame):
             self.hover_height,
         )
 
+    def set_edit_mode(self, enabled: bool) -> None:
+        self.edit_mode = enabled
+
+        if not enabled:
+            self.animation.stop()
+            self.card.setGeometry(
+                self._default_geometry()
+            )
+
     def enterEvent(self, event) -> None:
+        self.card.set_hovered(True)
+
         if not self.edit_mode:
             super().enterEvent(event)
             return
@@ -69,6 +96,8 @@ class CardSlot(QFrame):
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
+        self.card.set_hovered(False)
+
         if not self.edit_mode:
             super().leaveEvent(event)
             return
@@ -79,10 +108,3 @@ class CardSlot(QFrame):
         self.animation.start()
 
         super().leaveEvent(event)
-
-    def set_edit_mode(self, enabled: bool) -> None:
-        self.edit_mode = enabled
-
-        if not enabled:
-            self.animation.stop()
-            self.card.setGeometry(self._default_geometry())

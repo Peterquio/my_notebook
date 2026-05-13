@@ -1,8 +1,8 @@
 from PySide6.QtCore import (
     QEasingCurve,
-    Property,
     QPropertyAnimation,
     QSize,
+    QParallelAnimationGroup
 )
 
 from PySide6.QtGui import QColor
@@ -39,6 +39,7 @@ class AppCard(QFrame):
         self.setObjectName("AppCard")
 
         self._criar_shadow()
+
         self._criar_layout(
             title,
             value,
@@ -47,14 +48,41 @@ class AppCard(QFrame):
         )
 
     def _criar_shadow(self) -> None:
-        shadow = QGraphicsDropShadowEffect()
+        self.shadow = QGraphicsDropShadowEffect()
 
-        shadow.setBlurRadius(25)
-        shadow.setOffset(0, 6)
+        self.shadow.setBlurRadius(8)
+        self.shadow.setOffset(0, 2)
+        self.shadow.setColor(QColor(0, 0, 0, 18))
 
-        shadow.setColor(QColor(0, 0, 0, 40))
+        self.setGraphicsEffect(self.shadow)
 
-        self.setGraphicsEffect(shadow)
+    def set_hovered(self, hovered: bool) -> None:
+        blur_target = 32 if hovered else 8
+        offset_target = 8 if hovered else 2
+
+        self.shadow_animation = QParallelAnimationGroup(self)
+
+        blur_animation = QPropertyAnimation(
+            self.shadow,
+            b"blurRadius",
+        )
+        blur_animation.setDuration(160)
+        blur_animation.setStartValue(self.shadow.blurRadius())
+        blur_animation.setEndValue(blur_target)
+        blur_animation.setEasingCurve(QEasingCurve.OutCubic)
+
+        offset_animation = QPropertyAnimation(
+            self.shadow,
+            b"yOffset",
+        )
+        offset_animation.setDuration(160)
+        offset_animation.setStartValue(self.shadow.yOffset())
+        offset_animation.setEndValue(offset_target)
+        offset_animation.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.shadow_animation.addAnimation(blur_animation)
+        self.shadow_animation.addAnimation(offset_animation)
+        self.shadow_animation.start()
 
     def _criar_layout(
         self,

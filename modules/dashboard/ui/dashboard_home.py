@@ -1,5 +1,6 @@
-from PySide6.QtWidgets import QGridLayout
-
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtCore import Qt
+from ui.widgets.dashboard_grid import DashboardGrid
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.app_card import AppCard
 from ui.widgets.card_slot import CardSlot
@@ -24,19 +25,24 @@ class DashboardHome(BaseScreen):
         )
 
         self.header_actions.addWidget(toolbar)
-        layout = QGridLayout(self.content_area)
+        dashboard_grid = DashboardGrid(
+            spacing=20,
+        )
 
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(20)
+        content_layout = QVBoxLayout(self.content_area)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(dashboard_grid)
+        content_layout.setAlignment(Qt.AlignTop)
 
         cards = [
-            ("Tarefas", "12", "5 vencem hoje", "📌"),
-            ("Financeiro", "R$ 2.500", "saldo previsto", "💰"),
-            ("Planner", "4", "metas ativas", "🗓️"),
-            ("Diário", "18", "registros salvos", "📖"),
+            ("Tarefas", "12", "5 vencem hoje", "📌", "1x1"),
+            ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "1x1"),
+            ("Planner", "4", "metas ativas", "🗓️", "1x1"),
+            ("Diário", "18", "registros salvos", "📖", "1x1"),
+            ("Planejamento Hopi Hari", "5", "Orçamento", "🎡", "1x1")
         ]
 
-        for index, (title, value, subtitle, icon) in enumerate(cards):
+        for index, (title, value, subtitle, icon, size) in enumerate(cards):
             card = AppCard(
                 title=title,
                 value=value,
@@ -44,12 +50,14 @@ class DashboardHome(BaseScreen):
                 icon=icon,
             )
 
-            row = index // 2
-            column = index % 2
-
             slot = CardSlot(card)
+
             self.card_slots.append(slot)
-            layout.addWidget(slot, row, column)
+
+            dashboard_grid.add_card(
+                slot,
+                size=size,
+            )
 
     def _toggle_edit_mode(
             self,

@@ -172,4 +172,9 @@ class MainWindow(QMainWindow):
             #EditButton:hover {
                 background-color: #e2e8f0;
             }
+            
+            #ScreenScroll {
+                border: none;
+                background-color: transparent;
+            }
         """)

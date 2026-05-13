@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
-
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
+from PySide6.QtCore import Qt
 
 class BaseScreen(QWidget):
     def __init__(
@@ -33,11 +33,19 @@ class BaseScreen(QWidget):
         self.header_layout.addStretch()
         self.header_layout.addLayout(self.header_actions)
 
+        self.content_scroll = QScrollArea()
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.content_scroll.setObjectName("ScreenScroll")
+
         self.content_area = QWidget()
         self.content_area.setObjectName("ScreenContent")
 
+        self.content_scroll.setWidget(self.content_area)
+
         self.main_layout.addLayout(self.header_layout)
-        self.main_layout.addWidget(self.content_area)
+        self.main_layout.addWidget(self.content_scroll, stretch=1)
 
     def set_edit_mode(self, enabled: bool) -> None:
         self.edit_mode = enabled
