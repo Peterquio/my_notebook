@@ -8,7 +8,7 @@ class SidebarSeparator(ctk.CTkFrame):
         super().__init__(
             master,
             width=150,
-            height=1,
+            height=3,
             corner_radius=0,
             fg_color=theme_tokens.SIDEBAR_SEPARATOR,
             **kwargs

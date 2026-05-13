@@ -15,6 +15,8 @@ class BaseScreen(ctk.CTkFrame):
             **kwargs
         )
 
+        self.edit_mode = False
+
         self.grid(row=0, column=0, sticky="nsew")
 
         self.grid_rowconfigure(1, weight=1)
@@ -24,12 +26,12 @@ class BaseScreen(ctk.CTkFrame):
         self._criar_content_area()
 
     def _criar_cabecalho(self, title: str, subtitle: str) -> None:
-        header_frame = ctk.CTkFrame(
+        self.header_frame = ctk.CTkFrame(
             self,
             fg_color="transparent",
         )
 
-        header_frame.grid(
+        self.header_frame.grid(
             row=0,
             column=0,
             sticky="ew",
@@ -37,8 +39,22 @@ class BaseScreen(ctk.CTkFrame):
             pady=(30, 20),
         )
 
+        self.header_frame.grid_columnconfigure(0, weight=1)
+        self.header_frame.grid_columnconfigure(1, weight=0)
+
+        text_frame = ctk.CTkFrame(
+            self.header_frame,
+            fg_color="transparent",
+        )
+
+        text_frame.grid(
+            row=0,
+            column=0,
+            sticky="w",
+        )
+
         titulo = ctk.CTkLabel(
-            header_frame,
+            text_frame,
             text=title,
             font=("Segoe UI", 28, "bold"),
             anchor="w",
@@ -48,13 +64,24 @@ class BaseScreen(ctk.CTkFrame):
 
         if subtitle:
             subtitulo = ctk.CTkLabel(
-                header_frame,
+                text_frame,
                 text=subtitle,
                 font=("Segoe UI", 14),
                 anchor="w",
             )
 
             subtitulo.pack(anchor="w", pady=(5, 0))
+
+        self.header_actions = ctk.CTkFrame(
+            self.header_frame,
+            fg_color="transparent",
+        )
+
+        self.header_actions.grid(
+            row=0,
+            column=1,
+            sticky="e",
+        )
 
     def _criar_content_area(self) -> None:
         self.content_area = ctk.CTkFrame(
@@ -72,3 +99,13 @@ class BaseScreen(ctk.CTkFrame):
 
         self.content_area.grid_rowconfigure(0, weight=1)
         self.content_area.grid_columnconfigure(0, weight=1)
+
+    def set_edit_mode(self, enabled: bool) -> None:
+        self.edit_mode = enabled
+
+        if enabled:
+            self.configure(fg_color="#f8fafc")
+            self.content_area.configure(fg_color="#f8fafc")
+        else:
+            self.configure(fg_color="transparent")
+            self.content_area.configure(fg_color="transparent")
