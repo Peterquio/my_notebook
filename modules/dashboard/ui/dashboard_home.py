@@ -35,9 +35,9 @@ class DashboardHome(BaseScreen):
         content_layout.setAlignment(Qt.AlignTop)
 
         cards = [
-            ("Tarefas", "12", "5 vencem hoje", "📌", "3x1"),
-            ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "1x2"),
-            ("Planner", "4", "metas ativas", "🗓️", "1x1"),
+            ("Tarefas", "12", "5 vencem hoje", "📌", "1x1"),
+            ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "2x1"),
+            ("Planner", "4", "metas ativas", "🗓️", "1x2"),
             ("Diário", "18", "registros salvos", "📖", "1x1"),
             ("Planejamento Hopi Hari", "5", "Orçamento", "🎡", "3x3")
         ]
@@ -50,7 +50,10 @@ class DashboardHome(BaseScreen):
                 icon=icon,
             )
 
-            slot = CardSlot(card)
+            slot = CardSlot(
+                card,
+                size=size,
+            )
 
             self.card_slots.append(slot)
 

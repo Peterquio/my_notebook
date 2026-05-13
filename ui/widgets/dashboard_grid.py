@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea
+from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea, QFrame
 
 class DashboardGrid(QWidget):
     def __init__(
@@ -17,11 +17,16 @@ class DashboardGrid(QWidget):
 
         self.items = []
         self.occupied_cells = []
+        self.card_positions = {}
         self.current_columns = 1
+        self.drop_preview = QFrame(self)
+        self.drop_preview.hide()
 
         self.layout = QGridLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(spacing)
+
+        self.card_positions = {}
 
         self._last_cell_width = self.min_cell_width
         self._last_cell_height = int(self.min_cell_width * self.cell_ratio)
@@ -107,6 +112,13 @@ class DashboardGrid(QWidget):
                 height_units,
                 width_units,
             )
+
+            self.card_positions[widget] = {
+                "row": row,
+                "column": column,
+                "width_units": width_units,
+                "height_units": height_units,
+            }
 
             self._mark_cells_as_occupied(
                 row,
@@ -208,6 +220,52 @@ class DashboardGrid(QWidget):
             for c in range(column, column + width_units):
                 self.occupied_cells.append((r, c))
 
+    def get_cards_in_area(
+            self,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
+    ) -> list:
+
+        target_cells = set()
+
+        for r in range(row, row + height_units):
+            for c in range(column, column + width_units):
+                target_cells.add((r, c))
+
+        conflicting_cards = []
+
+        for widget, position in self.card_positions.items():
+            widget_cells = set()
+
+            widget_row = position["row"]
+            widget_column = position["column"]
+            widget_width = position["width_units"]
+            widget_height = position["height_units"]
+
+            for r in range(widget_row, widget_row + widget_height):
+                for c in range(widget_column, widget_column + widget_width):
+                    widget_cells.add((r, c))
+
+            if target_cells.intersection(widget_cells):
+                conflicting_cards.append(widget)
+
+        return conflicting_cards
+
+    def can_drop_card_at(
+            self,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
+    ) -> bool:
+
+        if column + width_units > self.current_columns:
+            return False
+
+        return True
+
     def _clear_layout(self) -> None:
         while self.layout.count():
             item = self.layout.takeAt(0)
@@ -238,3 +296,107 @@ class DashboardGrid(QWidget):
             return None
 
         return row, column
+
+    def show_drop_preview(
+            self,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
+            valid: bool,
+    ) -> None:
+
+        cell_width = self._last_cell_width
+        cell_height = self._last_cell_height
+
+        x = column * (cell_width + self.spacing)
+        y = row * (cell_height + self.spacing)
+
+        width = (
+                cell_width * width_units
+                + self.spacing * (width_units - 1)
+        )
+
+        height = (
+                cell_height * height_units
+                + self.spacing * (height_units - 1)
+        )
+
+        if valid:
+            color = "rgba(34, 197, 94, 55)"
+            border = "rgba(34, 197, 94, 150)"
+        else:
+            color = "rgba(239, 68, 68, 45)"
+            border = "rgba(239, 68, 68, 140)"
+
+        self.drop_preview.setStyleSheet(f"""
+            QFrame {{
+                background-color: {color};
+                border: 2px dashed {border};
+                border-radius: 18px;
+            }}
+        """)
+
+        self.drop_preview.setGeometry(
+            x,
+            y,
+            width,
+            height,
+        )
+
+        self.drop_preview.show()
+        self.drop_preview.raise_()
+
+    def hide_drop_preview(self) -> None:
+        self.drop_preview.hide()
+
+    def move_card_to(
+            self,
+            widget,
+            row: int,
+            column: int,
+    ) -> None:
+
+        if widget not in self.card_positions:
+            return
+
+        position = self.card_positions[widget]
+
+        width_units = position["width_units"]
+        height_units = position["height_units"]
+
+        self.layout.removeWidget(widget)
+
+        self.card_positions[widget] = {
+            "row": row,
+            "column": column,
+            "width_units": width_units,
+            "height_units": height_units,
+        }
+
+        self._rebuild_grid_from_positions()
+
+    def _rebuild_grid_from_positions(self) -> None:
+        self._clear_layout()
+        self.occupied_cells = []
+
+        for widget, position in self.card_positions.items():
+            row = position["row"]
+            column = position["column"]
+            width_units = position["width_units"]
+            height_units = position["height_units"]
+
+            self.layout.addWidget(
+                widget,
+                row,
+                column,
+                height_units,
+                width_units,
+            )
+
+            self._mark_cells_as_occupied(
+                row,
+                column,
+                width_units,
+                height_units,
+            )

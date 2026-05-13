@@ -6,15 +6,20 @@ from PySide6.QtCore import QRect
 
 class CardSlot(QFrame):
     def __init__(
-        self,
-        card,
-        width: int = 260,
-        height: int = 180,
-        scale: float = 1.04,
+            self,
+            card,
+            width: int = 260,
+            height: int = 180,
+            scale: float = 1.04,
+            size: str = "1x1",
     ):
         super().__init__()
 
         self.card = card
+        self.size = size
+        width_units, height_units = (size.lower().split("x"))
+        self.width_units = int(width_units)
+        self.height_units = int(height_units)
         self.edit_mode = False
         self.pressed = False
         self.drag_start_position = QPoint()
@@ -149,8 +154,31 @@ class CardSlot(QFrame):
                 if cell is not None:
                     row, column = cell
 
+                    can_drop = dashboard_grid.can_drop_card_at(
+                        row=row,
+                        column=column,
+                        width_units=self.width_units,
+                        height_units=self.height_units,
+                    )
+
+                    dashboard_grid.show_drop_preview(
+                        row=row,
+                        column=column,
+                        width_units=self.width_units,
+                        height_units=self.height_units,
+                        valid=can_drop,
+                    )
+
+                    conflicts = dashboard_grid.get_cards_in_area(
+                        row=row,
+                        column=column,
+                        width_units=self.width_units,
+                        height_units=self.height_units,
+                    )
+
                     print(
-                        f"Hover célula -> row={row}, column={column}"
+                        f"Hover célula -> row={row}, column={column}, "
+                        f"pode={can_drop}, conflitos={len(conflicts)}"
                     )
 
         super().mouseMoveEvent(event)
@@ -161,6 +189,47 @@ class CardSlot(QFrame):
             self.card.set_pressed(False)
 
         self.card.set_dragging(False)
+        dashboard_grid = self._find_dashboard_grid()
+
+        if dashboard_grid is not None:
+            dashboard_grid.hide_drop_preview()
+
+        dashboard_grid = self._find_dashboard_grid()
+
+        if dashboard_grid is not None and self.dragging:
+            global_pos = event.globalPosition().toPoint()
+
+            cell = dashboard_grid.get_cell_from_global_position(global_pos)
+
+            if cell is not None:
+                row, column = cell
+
+                can_drop = dashboard_grid.can_drop_card_at(
+                    row=row,
+                    column=column,
+                    width_units=self.width_units,
+                    height_units=self.height_units,
+                )
+
+                conflicts = dashboard_grid.get_cards_in_area(
+                    row=row,
+                    column=column,
+                    width_units=self.width_units,
+                    height_units=self.height_units,
+                )
+
+                if can_drop and len(conflicts) == 0:
+                    dashboard_grid.move_card_to(
+                        self,
+                        row=row,
+                        column=column,
+                    )
+
+                print(
+                    f"Soltou em -> row={row}, column={column}, "
+                    f"pode={can_drop}, conflitos={len(conflicts)}"
+                )
+
         self._destroy_drag_ghost()
         self.dragging = False
         super().mouseReleaseEvent(event)
