@@ -125,3 +125,17 @@ class AppCard(QFrame):
             layout.addWidget(subtitle_label)
 
         layout.addStretch()
+
+    def set_pressed(self, pressed: bool) -> None:
+        self.setProperty("pressed", "true" if pressed else "false")
+
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+    def set_dragging(self, dragging: bool) -> None:
+        self.setProperty("dragging", "true" if dragging else "false")
+
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()

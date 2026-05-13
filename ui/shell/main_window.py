@@ -10,7 +10,7 @@ from core.config.app_config import (
 
 from ui.shell.sidebar import Sidebar
 from ui.shell.navigation_manager import NavigationManager
-
+from core.themes.theme_tokens import *
 from modules.dashboard.ui.dashboard_home import DashboardHome
 from modules.finance.ui.finance_home import FinanceHome
 from modules.tasker.ui.tasker_home import TaskerHome
@@ -86,22 +86,22 @@ class MainWindow(QMainWindow):
         self.navigation_manager.navegar_para(nome_tela)
 
     def _aplicar_estilo(self) -> None:
-        self.setStyleSheet("""
-            QMainWindow {
+        self.setStyleSheet(f"""
+            QMainWindow {{
                 background-color: #f8fafc;
-            }
+            }}
 
-            #Sidebar {
+            #Sidebar {{
                 background-color: #111827;
-            }
+            }}
 
-            #SidebarTitle {
+            #SidebarTitle {{
                 color: white;
                 font-size: 22px;
                 font-weight: bold;
-            }
+            }}
 
-            #SidebarButton {
+            #SidebarButton {{
                 color: white;
                 background-color: transparent;
                 border: none;
@@ -110,71 +110,81 @@ class MainWindow(QMainWindow):
                 text-align: left;
                 font-size: 14px;
                 font-weight: bold;
-            }
+            }}
 
-            #SidebarButton:hover {
+            #SidebarButton:hover {{
                 background-color: #1f2937;
-            }
+            }}
 
-            #SidebarButton:checked {
+            #SidebarButton:checked {{
                 background-color: #2563eb;
-            }
+            }}
 
-            #ScreenTitle {
+            #ScreenTitle {{
                 color: #111827;
                 font-size: 28px;
                 font-weight: bold;
-            }
+            }}
 
-            #ScreenSubtitle {
+            #ScreenSubtitle {{
                 color: #64748b;
                 font-size: 14px;
-            }
+            }}
 
-            #ScreenContent {
+            #ScreenContent {{
                 background-color: transparent;
-            }
-            
-            #AppCard {
-                background-color: white;
-                border-radius: 20px;
-            }
+            }}
 
-            #CardTitle {
+            #AppCard {{
+                background-color: {CARD_BG};
+                border-radius: {CARD_RADIUS};
+            }}
+
+            #AppCard[pressed="true"] {{
+                background-color: {CARD_ACTIVE_BG};
+                border: 1px solid {CARD_ACTIVE_BORDER};
+            }}
+            
+            #AppCard[dragging="true"] {{
+                background-color: rgba(191, 219, 254, 0.95);
+                border: 2px solid rgba(37, 99, 235, 0.65);
+            }}
+
+            #CardTitle {{
                 color: #475569;
                 font-size: 14px;
                 font-weight: bold;
-            }
-            
-            #CardValue {
+            }}
+
+            #CardValue {{
                 color: #111827;
                 font-size: 30px;
                 font-weight: bold;
-            }
-            
-            #CardSubtitle {
+            }}
+
+            #CardSubtitle {{
                 color: #64748b;
                 font-size: 13px;
-            }
-            
-            #CardIcon {
+            }}
+
+            #CardIcon {{
                 font-size: 22px;
-            }
-            
-            #EditButton {
+            }}
+
+            #EditButton {{
                 background-color: white;
                 border: none;
                 border-radius: 14px;
                 padding: 10px 14px;
                 font-size: 16px;
-            }
-            
-            #EditButton:hover {
+            }}
+
+            #EditButton:hover {{
                 background-color: #e2e8f0;
-            }
-            
-            #ScreenScroll {
+            }}
+
+            #ScreenScroll {{
                 border: none;
                 background-color: transparent;
-            }
+            }}
         """)

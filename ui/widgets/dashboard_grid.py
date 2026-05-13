@@ -23,6 +23,9 @@ class DashboardGrid(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(spacing)
 
+        self._last_cell_width = self.min_cell_width
+        self._last_cell_height = int(self.min_cell_width * self.cell_ratio)
+
     def add_card(
         self,
         widget,
@@ -65,6 +68,8 @@ class DashboardGrid(QWidget):
         )
 
         cell_height = int(cell_width * self.cell_ratio)
+        self._last_cell_width = cell_width
+        self._last_cell_height = cell_height
 
         for item in self.items:
             widget = item["widget"]
@@ -209,3 +214,27 @@ class DashboardGrid(QWidget):
 
             if item.widget():
                 self.layout.removeWidget(item.widget())
+
+    def get_cell_from_global_position(
+            self,
+            global_pos,
+    ) -> tuple[int, int] | None:
+
+        local_pos = self.mapFromGlobal(global_pos)
+
+        if not self.rect().contains(local_pos):
+            return None
+
+        cell_width = self._last_cell_width
+        cell_height = self._last_cell_height
+
+        total_cell_width = cell_width + self.spacing
+        total_cell_height = cell_height + self.spacing
+
+        column = local_pos.x() // total_cell_width
+        row = local_pos.y() // total_cell_height
+
+        if column < 0 or column >= self.current_columns:
+            return None
+
+        return row, column

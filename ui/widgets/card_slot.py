@@ -1,5 +1,7 @@
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QPoint
 from PySide6.QtWidgets import QFrame
+from PySide6.QtGui import QRegion, QPainterPath
+from PySide6.QtCore import QRect
 
 
 class CardSlot(QFrame):
@@ -13,8 +15,30 @@ class CardSlot(QFrame):
         super().__init__()
 
         self.card = card
-        self.scale = scale
         self.edit_mode = False
+        self.pressed = False
+        self.drag_start_position = QPoint()
+        self.dragging = False
+        self.drag_ghost = None
+        self.scale = scale
+        self.selected = False
+        self.setObjectName("CardSlot")
+        self.default_style = """
+            #CardSlot {
+                border: none;
+                background-color: transparent;
+            }
+        """
+
+        self.selected_style = """
+            #CardSlot {
+                border: 2px solid rgba(37, 99, 235, 120);
+                border-radius: 24px;
+                background-color: transparent;
+            }
+        """
+
+        self.setStyleSheet(self.default_style)
 
         self.card.setParent(self)
 
@@ -75,11 +99,79 @@ class CardSlot(QFrame):
     def set_edit_mode(self, enabled: bool) -> None:
         self.edit_mode = enabled
 
-        if not enabled:
+        if enabled:
+            self.setCursor(Qt.OpenHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
             self.animation.stop()
             self.card.setGeometry(
                 self._default_geometry()
             )
+
+    def mousePressEvent(self, event) -> None:
+        if self.edit_mode:
+            self.setCursor(Qt.ClosedHandCursor)
+            self.card.set_pressed(True)
+            self.drag_start_position = event.position().toPoint()
+            self.dragging = False
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if not self.edit_mode:
+            super().mouseMoveEvent(event)
+            return
+
+        distance = (
+                event.position().toPoint()
+                - self.drag_start_position
+        ).manhattanLength()
+
+        if distance > 8 and not self.dragging:
+            self.dragging = True
+            self.card.set_dragging(True)
+            self.setCursor(Qt.ClosedHandCursor)
+            self._create_drag_ghost()
+            self._move_drag_ghost(event.globalPosition().toPoint())
+
+        if self.dragging:
+            global_pos = event.globalPosition().toPoint()
+
+            self._move_drag_ghost(global_pos)
+
+            dashboard_grid = self._find_dashboard_grid()
+
+            if dashboard_grid is not None:
+                cell = dashboard_grid.get_cell_from_global_position(
+                    global_pos
+                )
+
+                if cell is not None:
+                    row, column = cell
+
+                    print(
+                        f"Hover célula -> row={row}, column={column}"
+                    )
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self.edit_mode:
+            self.setCursor(Qt.OpenHandCursor)
+            self.card.set_pressed(False)
+
+        self.card.set_dragging(False)
+        self._destroy_drag_ghost()
+        self.dragging = False
+        super().mouseReleaseEvent(event)
+
+    def set_pressed(self, pressed: bool) -> None:
+        self.pressed = pressed
+
+        if pressed:
+            self.setStyleSheet(self.selected_style)
+        else:
+            self.setStyleSheet(self.default_style)
 
     def enterEvent(self, event) -> None:
         self.card.set_hovered(True)
@@ -108,3 +200,61 @@ class CardSlot(QFrame):
         self.animation.start()
 
         super().leaveEvent(event)
+
+    def _create_drag_ghost(self) -> None:
+        if self.drag_ghost is not None:
+            return
+
+        self.drag_ghost = QFrame()
+        self.drag_ghost.setFixedSize(self.card.size())
+
+        path = QPainterPath()
+
+        path.addRoundedRect(
+            QRect(0, 0, self.drag_ghost.width(), self.drag_ghost.height(),), 22, 22,
+        )
+        region = QRegion(path.toFillPolygon().toPolygon())
+        self.drag_ghost.setMask(region)
+
+        self.drag_ghost.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 255);
+                border: 1px solid rgba(148, 163, 184, 120);
+                border-radius: 22px;
+            }
+        """)
+
+        self.drag_ghost.setWindowOpacity(0.72)
+        self.drag_ghost.setWindowFlags(
+            Qt.FramelessWindowHint
+            | Qt.Tool
+            | Qt.WindowStaysOnTopHint
+        )
+
+        self.drag_ghost.show()
+
+    def _move_drag_ghost(self, global_pos) -> None:
+        if self.drag_ghost is None:
+            return
+
+        x = global_pos.x() - self.drag_ghost.width() // 2
+        y = global_pos.y() - self.drag_ghost.height() // 2
+
+        self.drag_ghost.move(x, y)
+        self.drag_ghost.raise_()
+
+    def _destroy_drag_ghost(self) -> None:
+        if self.drag_ghost is not None:
+            self.drag_ghost.close()
+            self.drag_ghost = None
+
+    def _find_dashboard_grid(self):
+        parent = self.parent()
+
+        while parent is not None:
+            if parent.__class__.__name__ == "DashboardGrid":
+                return parent
+
+            parent = parent.parent()
+
+        return None
