@@ -1,66 +1,62 @@
-import random
+from PySide6.QtCore import (
+    QEasingCurve,
+    Property,
+    QPropertyAnimation,
+    QSize,
+)
 
-import customtkinter as ctk
+from PySide6.QtGui import QColor
 
-from core.themes.theme_manager import theme
-from core.themes.card_variants import CARD_VARIANTS
+from PySide6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGraphicsDropShadowEffect,
+)
 
 
-class AppCard(ctk.CTkFrame):
+class AppCard(QFrame):
     def __init__(
         self,
-        master,
         title: str,
         value: str = "",
         subtitle: str = "",
         icon: str = "",
-        variant: str = "default",
-        width: int = 250,
-        height: int = 160,
-        clickable: bool = False,
-        command=None,
-        **kwargs
+        width: int = 260,
+        height: int = 180,
     ):
-        self.variant = self._resolver_variant(variant)
+        super().__init__()
 
-        super().__init__(
-            master,
-            width=width,
-            height=height,
-            corner_radius=self.variant["corner_radius"],
-            fg_color=self.variant["fg_color"],
-            border_color=self.variant["border_color"],
-            border_width=self.variant["border_width"],
-            **kwargs
+        self.default_size = QSize(width, height)
+        self.hover_size = QSize(
+            int(width * 1.04),
+            int(height * 1.04),
         )
 
-        self.grid_propagate(False)
-        self.pack_propagate(False)
+        self.setFixedSize(self.default_size)
 
-        self.clickable = clickable
-        self.command = command
+        self.setObjectName("AppCard")
 
-        self._criar_widgets(
+        self._criar_shadow()
+        self._criar_layout(
             title,
             value,
             subtitle,
             icon,
         )
 
-        if clickable:
-            self._configurar_hover()
+    def _criar_shadow(self) -> None:
+        shadow = QGraphicsDropShadowEffect()
 
-    def _resolver_variant(self, variant: str) -> dict:
-        if variant == "random":
-            variant_name = random.choice(
-                list(CARD_VARIANTS.keys())
-            )
+        shadow.setBlurRadius(25)
+        shadow.setOffset(0, 6)
 
-            return theme.get_card_variant(variant_name)
+        shadow.setColor(QColor(0, 0, 0, 40))
 
-        return theme.get_card_variant(variant)
+        self.setGraphicsEffect(shadow)
 
-    def _criar_widgets(
+    def _criar_layout(
         self,
         title: str,
         value: str,
@@ -68,89 +64,36 @@ class AppCard(ctk.CTkFrame):
         icon: str,
     ) -> None:
 
-        top_frame = ctk.CTkFrame(
-            self,
-            fg_color="transparent",
-        )
+        layout = QVBoxLayout(self)
 
-        top_frame.pack(
-            fill="x",
-            padx=20,
-            pady=(18, 8),
-        )
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
 
-        titulo = ctk.CTkLabel(
-            top_frame,
-            text=title,
-            font=("Segoe UI", 15, "bold"),
-            anchor="w",
-        )
+        top_layout = QHBoxLayout()
 
-        titulo.pack(side="left")
+        title_label = QLabel(title)
+        title_label.setObjectName("CardTitle")
 
-        valor = ctk.CTkLabel(
-            self,
-            text=value,
-            font=("Segoe UI", 30, "bold"),
-            anchor="w",
-        )
-
-        valor.pack(
-            anchor="w",
-            padx=20,
-        )
-
-        if subtitle:
-            subtitulo = ctk.CTkLabel(
-                self,
-                text=subtitle,
-                font=("Segoe UI", 13),
-                anchor="w",
-            )
-
-            subtitulo.pack(
-                anchor="w",
-                padx=20,
-                pady=(6, 0),
-            )
-
-        bottom_frame = ctk.CTkFrame(
-            self,
-            fg_color="transparent",
-        )
-
-        bottom_frame.pack(
-            fill="both",
-            expand=True,
-            padx=18,
-            pady=(0, 12),
-        )
+        top_layout.addWidget(title_label)
+        top_layout.addStretch()
 
         if icon:
-            icone = ctk.CTkLabel(
-                bottom_frame,
-                text=icon,
-                font=("Segoe UI Emoji", 24),
-            )
+            icon_label = QLabel(icon)
+            icon_label.setObjectName("CardIcon")
 
-            icone.pack(
-                anchor="se",
-                side="right",
-            )
+            top_layout.addWidget(icon_label)
 
-    def _configurar_hover(self) -> None:
-        self.bind("<Enter>", self._on_enter)
-        self.bind("<Leave>", self._on_leave)
-        self.bind("<Button-1>", self._on_click)
+        layout.addLayout(top_layout)
 
-    def _on_enter(self, event) -> None:
-        self.configure(border_width=3)
+        value_label = QLabel(value)
+        value_label.setObjectName("CardValue")
 
-    def _on_leave(self, event) -> None:
-        self.configure(
-            border_width=self.variant["border_width"]
-        )
+        layout.addWidget(value_label)
 
-    def _on_click(self, event) -> None:
-        if self.command:
-            self.command()
+        if subtitle:
+            subtitle_label = QLabel(subtitle)
+            subtitle_label.setObjectName("CardSubtitle")
+
+            layout.addWidget(subtitle_label)
+
+        layout.addStretch()

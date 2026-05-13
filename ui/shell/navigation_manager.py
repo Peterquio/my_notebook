@@ -1,16 +1,9 @@
-#NÃO queremos destruir widgets toda hora
-#NÃO queremos recriar telas gigantes
-#queremos lazy loading
-#queremos cache de telas
-#queremos navegação modular profissional
-#Esse arquivo é o cérebro da UI.
-
-import customtkinter as ctk
+from PySide6.QtWidgets import QStackedWidget
 
 
 class NavigationManager:
-    def __init__(self, content_frame: ctk.CTkFrame):
-        self.content_frame = content_frame
+    def __init__(self, content_stack: QStackedWidget):
+        self.content_stack = content_stack
         self.screens = {}
 
     def registrar_tela(self, nome: str, tela_factory) -> None:
@@ -23,13 +16,11 @@ class NavigationManager:
         if nome not in self.screens:
             raise ValueError(f"Tela não registrada: {nome}")
 
-        for widget in self.content_frame.winfo_children():
-            widget.grid_forget()
-
         tela_info = self.screens[nome]
 
         if tela_info["instance"] is None:
-            tela_info["instance"] = tela_info["factory"](self.content_frame)
+            tela = tela_info["factory"]()
+            tela_info["instance"] = tela
+            self.content_stack.addWidget(tela)
 
-        tela = tela_info["instance"]
-        tela.grid(row=0, column=0, sticky="nsew")
+        self.content_stack.setCurrentWidget(tela_info["instance"])

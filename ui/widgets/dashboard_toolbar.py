@@ -1,48 +1,43 @@
-import customtkinter as ctk
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QPushButton, QHBoxLayout, QWidget
 
 
-class DashboardToolbar(ctk.CTkFrame):
-    def __init__(
-        self,
-        master,
-        on_toggle_edit,
-        **kwargs
-    ):
-        super().__init__(
-            master,
-            fg_color="transparent",
-            **kwargs
-        )
+class DashboardToolbar(QWidget):
+
+    edit_mode_changed = Signal(bool)
+
+    def __init__(self):
+        super().__init__()
 
         self.edit_mode = False
-        self.on_toggle_edit = on_toggle_edit
 
+        self._criar_layout()
         self._criar_widgets()
 
+    def _criar_layout(self) -> None:
+        self.layout = QHBoxLayout(self)
+
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
     def _criar_widgets(self) -> None:
-        self.edit_button = ctk.CTkButton(
-            self,
-            text="⚙",
-            width=42,
-            height=42,
-            corner_radius=12,
-            command=self._toggle_edit_mode,
+        self.edit_button = QPushButton("⚙")
+
+        self.edit_button.setObjectName("EditButton")
+
+        self.edit_button.clicked.connect(
+            self._toggle_edit_mode
         )
 
-        self.edit_button.pack(
-            side="right",
-        )
+        self.layout.addWidget(self.edit_button)
 
     def _toggle_edit_mode(self) -> None:
         self.edit_mode = not self.edit_mode
 
-        self.on_toggle_edit(self.edit_mode)
-
         if self.edit_mode:
-            self.edit_button.configure(
-                text="✔"
-            )
+            self.edit_button.setText("✔")
         else:
-            self.edit_button.configure(
-                text="⚙"
-            )
+            self.edit_button.setText("⚙")
+
+        self.edit_mode_changed.emit(
+            self.edit_mode
+        )

@@ -1,48 +1,33 @@
-#Cria sidebar + área de conteúdo
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton
 
-import customtkinter as ctk
-from ui.widgets.sidebar_button import SidebarButton
-from core.themes import theme_tokens
-from ui.widgets.sidebar_title import SidebarTitle
-from ui.widgets.sidebar_separator import SidebarSeparator
 
-class Sidebar(ctk.CTkFrame):
-    def __init__(self, master, on_navigate):
-        super().__init__(
-            master,
-            width=260,
-            corner_radius=0,
-            fg_color=theme_tokens.SIDEBAR_BG,
-        )
-        self.on_navigate = on_navigate
+class Sidebar(QFrame):
+    navigate_requested = Signal(str)
 
-        self.grid(row=0, column=0, sticky="nsew")
-        self.grid_propagate(False)
+    def __init__(self):
+        super().__init__()
 
         self.buttons = {}
         self.selected_module = "dashboard"
 
+        self.setFixedWidth(260)
+        self.setObjectName("Sidebar")
+
+        self._criar_layout()
         self._criar_widgets()
 
+    def _criar_layout(self) -> None:
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(20, 30, 20, 20)
+        self.layout.setSpacing(10)
+
     def _criar_widgets(self) -> None:
-        titulo = SidebarTitle(
-            self,
-            text="My Notebook",
-        )
+        title = QLabel("My Notebook")
+        title.setObjectName("SidebarTitle")
+        self.layout.addWidget(title)
 
-        titulo.pack(
-            padx=20,
-            pady=(30, 20),
-            anchor="w",
-        )
-
-        separador = SidebarSeparator(self)
-
-        separador.pack(
-            padx=20,
-            pady=(0, 15),
-            anchor="w",
-        )
+        self.layout.addSpacing(15)
 
         itens_menu = [
             ("dashboard", "Dashboard"),
@@ -54,25 +39,24 @@ class Sidebar(ctk.CTkFrame):
         ]
 
         for module_name, label in itens_menu:
-            button = SidebarButton(
-                self,
-                text=label,
-                selected=module_name == self.selected_module,
-                command=lambda name=module_name: self._navegar(name),
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.setObjectName("SidebarButton")
+            button.clicked.connect(
+                lambda checked=False, name=module_name: self._navegar(name)
             )
 
-            button.pack(
-                fill="x",
-                padx=15,
-                pady=5,
-            )
-
+            self.layout.addWidget(button)
             self.buttons[module_name] = button
+
+        self.layout.addStretch()
+        self._atualizar_botao_selecionado()
 
     def _navegar(self, module_name: str) -> None:
         self.selected_module = module_name
+        self._atualizar_botao_selecionado()
+        self.navigate_requested.emit(module_name)
 
+    def _atualizar_botao_selecionado(self) -> None:
         for name, button in self.buttons.items():
-            button.set_selected(name == module_name)
-
-        self.on_navigate(module_name)
+            button.setChecked(name == self.selected_module)

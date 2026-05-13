@@ -1,72 +1,62 @@
+from PySide6.QtWidgets import QGridLayout
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.app_card import AppCard
-from ui.widgets.editable_card_grid import EditableCardGrid
-from ui.widgets.add_card_button import AddCardButton
+from ui.widgets.card_slot import CardSlot
 from ui.widgets.dashboard_toolbar import DashboardToolbar
 
+
 class DashboardHome(BaseScreen):
-    def __init__(self, master):
+    def __init__(self):
         super().__init__(
-            master,
             title="Dashboard",
             subtitle="Visão geral do seu sistema pessoal.",
         )
 
+        self.card_slots = []
         self._criar_widgets()
 
     def _criar_widgets(self) -> None:
-        toolbar = DashboardToolbar(
-            self.header_actions,
-            on_toggle_edit=self._toggle_edit_mode,
+        toolbar = DashboardToolbar()
+
+        toolbar.edit_mode_changed.connect(
+            self._toggle_edit_mode
         )
 
-        toolbar.pack()
+        self.header_actions.addWidget(toolbar)
+        layout = QGridLayout(self.content_area)
 
-        self.card_grid = EditableCardGrid(
-            self.content_area,
-            columns=4,
-        )
-
-        self.card_grid.grid(
-            row=0,
-            column=0,
-            sticky="nw",
-        )
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
 
         cards = [
-            ("Tarefas", "12", "5 vencem hoje", "📌", "1x1"),
-            ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "2x1"),
-            ("Planner", "4", "metas ativas", "🗓️", "1x2"),
-            ("Diário", "18", "registros", "📖", "2x1"),
-            ("Calendário", "13/05", "15 dias sem fumar", "🚭", "1x1"),
+            ("Tarefas", "12", "5 vencem hoje", "📌"),
+            ("Financeiro", "R$ 2.500", "saldo previsto", "💰"),
+            ("Planner", "4", "metas ativas", "🗓️"),
+            ("Diário", "18", "registros salvos", "📖"),
         ]
 
-        for title, value, subtitle, icon, size in cards:
+        for index, (title, value, subtitle, icon) in enumerate(cards):
             card = AppCard(
-                self.card_grid,
                 title=title,
                 value=value,
                 subtitle=subtitle,
                 icon=icon,
-                variant="random",
-                clickable=True,
             )
 
-            self.card_grid.add_card(
-                card,
-                size=size,
-            )
+            row = index // 2
+            column = index % 2
 
-        add_card = AddCardButton(
-            self.card_grid,
-            command=lambda: print("Adicionar novo card"),
-        )
+            slot = CardSlot(card)
+            self.card_slots.append(slot)
+            layout.addWidget(slot, row, column)
 
-        self.card_grid.add_card(
-            add_card,
-            size="1x1",
-        )
+    def _toggle_edit_mode(
+            self,
+            enabled: bool,
+    ) -> None:
 
-    def _toggle_edit_mode(self, enabled: bool) -> None:
         self.set_edit_mode(enabled)
-        self.card_grid.set_edit_mode(enabled)
+
+        for slot in self.card_slots:
+            slot.set_edit_mode(enabled)
