@@ -874,24 +874,52 @@ class DashboardGrid(QWidget):
 
     def create_layout_snapshot(self) -> None:
         self._layout_snapshot = {
-            widget: position.copy()
-            for widget, position in self.card_positions.items()
-            if widget != self.add_card_button
+            "items": [
+                item.copy()
+                for item in self.items
+                if item["widget"] != self.add_card_button
+            ],
+            "card_positions": {
+                widget: position.copy()
+                for widget, position in self.card_positions.items()
+                if widget != self.add_card_button
+            },
         }
 
     def restore_layout_snapshot(self) -> None:
         if self._layout_snapshot is None:
             return
 
-        self.card_positions = {
-            widget: position.copy()
-            for widget, position in self._layout_snapshot.items()
+        snapshot_widgets = {
+            item["widget"]
+            for item in self._layout_snapshot["items"]
         }
 
-        if self.add_card_button in self.card_positions:
-            del self.card_positions[self.add_card_button]
+        current_widgets = {
+            item["widget"]
+            for item in self.items
+        }
+
+        widgets_to_remove = current_widgets - snapshot_widgets
+
+        for widget in widgets_to_remove:
+            widget.hide()
+            widget.setParent(None)
+
+        self.items = [
+            item.copy()
+            for item in self._layout_snapshot["items"]
+        ]
+
+        self.card_positions = {
+            widget: position.copy()
+            for widget, position in self._layout_snapshot["card_positions"].items()
+        }
 
         self._layout_snapshot = None
+
+        self.add_card_button.hide()
+
         self._rebuild_grid_from_positions()
 
     def confirm_layout_changes(self) -> None:

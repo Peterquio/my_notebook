@@ -83,6 +83,12 @@ class EditableDashboardArea(QWidget):
         self.dashboard_grid.restore_layout_snapshot()
         self.dashboard_grid.set_edit_mode(False)
 
+        self.card_slots = [
+            item["widget"]
+            for item in self.dashboard_grid.items
+            if item["widget"] != self.dashboard_grid.add_card_button
+        ]
+
         for slot in self.card_slots:
             slot.set_edit_mode(False)
 

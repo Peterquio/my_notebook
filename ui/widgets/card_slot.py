@@ -140,6 +140,11 @@ class CardSlot(QFrame):
             self.drag_start_position = event.position().toPoint()
             self.dragging = False
 
+        self.animation.stop()
+        self.animation.setStartValue(self.card.geometry())
+        self.animation.setEndValue(self._default_geometry())
+        self.animation.start()
+
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
@@ -218,6 +223,13 @@ class CardSlot(QFrame):
             self.card.setCursor(Qt.OpenHandCursor)
             self.delete_button.setCursor(Qt.PointingHandCursor)
             self.card.set_pressed(False)
+
+        if self.underMouse():
+            self.animation.stop()
+            self.animation.setStartValue(self.card.geometry())
+            self.animation.setEndValue(self._hover_geometry())
+            self.animation.start()
+
 
         self.card.set_dragging(False)
         dashboard_grid = self._find_dashboard_grid()

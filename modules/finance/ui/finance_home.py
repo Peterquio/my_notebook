@@ -5,7 +5,7 @@ from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 from ui.widgets.card_catalog_dialog import CardCatalogDialog
 
-from modules.finance.cards.finance_card_catalog import FINANCE_CARD_CATALOG
+from modules.finance.services.finance_service import FinanceService
 from modules.finance.ui.finance_card_generator import gerar_card_financeiro
 
 
@@ -16,6 +16,7 @@ class FinanceHome(BaseScreen):
             subtitle="Controle suas receitas, despesas, cartões e categorias.",
         )
 
+        self.finance_service = FinanceService()
         self._criar_widgets()
 
     def _criar_widgets(self) -> None:
@@ -42,7 +43,7 @@ class FinanceHome(BaseScreen):
 
     def _abrir_seletor_cards(self) -> None:
         dialog = CardCatalogDialog(
-            FINANCE_CARD_CATALOG,
+            self.finance_service.listar_cards_disponiveis(),
             parent=self,
         )
 

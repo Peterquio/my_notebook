@@ -135,6 +135,81 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
             }}
 
+            #CardCatalogDialog {{
+                background-color: #f8fafc;
+                border-radius: 24px;
+            }}
+            
+            #CardCatalogDialogTitle {{
+                font-size: 22px;
+                font-weight: 800;
+                color: #0f172a;
+            }}
+            
+            #CardCatalogDialogSubtitle {{
+                font-size: 13px;
+                color: #64748b;
+            }}
+            
+            #CardCatalogCloseButton {{
+                background-color: rgba(226, 232, 240, 180);
+                border: none;
+                border-radius: 17px;
+                font-size: 22px;
+                font-weight: 700;
+                color: #475569;
+            }}
+            
+            #CardCatalogCloseButton:hover {{
+                background-color: rgba(239, 68, 68, 220);
+                color: white;
+            }}
+            
+            #CardCatalogScroll {{
+                border: none;
+                background-color: transparent;
+            }}
+            
+            #CardCatalogContent {{
+                background-color: transparent;
+            }}
+            
+            #CardCatalogItem {{
+                background-color: rgba(255, 255, 255, 245);
+                border: 1px solid rgba(203, 213, 225, 180);
+                border-radius: 20px;
+            }}
+            
+            #CardCatalogItem:hover {{
+                background-color: white;
+                border: 2px solid rgba(37, 99, 235, 150);
+            }}
+            
+            #CardCatalogIcon {{
+                background-color: rgba(37, 99, 235, 18);
+                border-radius: 16px;
+                font-size: 26px;
+            }}
+            
+            #CardCatalogTitle {{
+                font-size: 15px;
+                font-weight: 700;
+                color: #0f172a;
+            }}
+            
+            #CardCatalogSubtitle {{
+                font-size: 12px;
+                color: #64748b;
+            }}
+            
+            #CardCatalogSize {{
+                background-color: rgba(15, 23, 42, 12);
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 700;
+                color: #334155;
+            }}
+
             #AppCard {{
                 background-color: {CARD_BG};
                 border-radius: {CARD_RADIUS};
@@ -145,8 +220,8 @@ class MainWindow(QMainWindow):
             }}
 
             #AppCard[pressed="true"] {{
-                background-color: {CARD_ACTIVE_BG};
-                border: 1px solid {CARD_ACTIVE_BORDER};
+                background-color: rgba(37, 99, 235, 22);
+                border: 1px solid rgba(37, 99, 235, 120);
             }}
             
             #AppCard[dragging="true"] {{
