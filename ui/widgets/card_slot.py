@@ -139,12 +139,20 @@ class CardSlot(QFrame):
             self._create_drag_ghost()
             self._move_drag_ghost(event.globalPosition().toPoint())
 
+            dashboard_grid = self._find_dashboard_grid()
+
+            if dashboard_grid is not None:
+                dashboard_grid.start_drag_auto_scroll()
+
         if self.dragging:
             global_pos = event.globalPosition().toPoint()
 
             self._move_drag_ghost(global_pos)
 
             dashboard_grid = self._find_dashboard_grid()
+
+            if dashboard_grid is not None:
+                dashboard_grid.update_drag_auto_scroll(global_pos)
 
             if dashboard_grid is not None:
                 cell = dashboard_grid.get_cell_from_global_position(
@@ -229,6 +237,9 @@ class CardSlot(QFrame):
                     f"Soltou em -> row={row}, column={column}, "
                     f"pode={can_drop}, conflitos={len(conflicts)}"
                 )
+
+        if dashboard_grid is not None:
+            dashboard_grid.stop_drag_auto_scroll()
 
         self._destroy_drag_ghost()
         self.dragging = False
