@@ -872,6 +872,37 @@ class DashboardGrid(QWidget):
 
         return last_row + 1, 0
 
+    def get_layout_items(self) -> list[dict]:
+        layout_items = []
+
+        for widget, position in self.card_positions.items():
+            if widget == self.add_card_button:
+                continue
+
+            card_id = getattr(widget, "card_id", None)
+
+            if not card_id:
+                continue
+
+            layout_items.append(
+                {
+                    "card_id": card_id,
+                    "row": position["row"],
+                    "column": position["column"],
+                    "width_units": position["width_units"],
+                    "height_units": position["height_units"],
+                }
+            )
+
+        layout_items.sort(
+            key=lambda item: (
+                item["row"],
+                item["column"],
+            )
+        )
+
+        return layout_items
+
     def create_layout_snapshot(self) -> None:
         self._layout_snapshot = {
             "items": [

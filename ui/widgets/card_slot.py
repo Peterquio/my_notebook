@@ -10,11 +10,13 @@ class CardSlot(QFrame):
             height: int = 180,
             scale: float = 1.04,
             size: str = "1x1",
+            card_id: str | None = None,
     ):
         super().__init__()
 
         self.card = card
         self.size = size
+        self.card_id = card_id
         width_units, height_units = (size.lower().split("x"))
         self.width_units = int(width_units)
         self.height_units = int(height_units)

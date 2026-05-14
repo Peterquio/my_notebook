@@ -53,6 +53,7 @@ class DashboardHome(BaseScreen):
             slot = CardSlot(
                 card,
                 size=size,
+                card_id=title.lower().replace(" ", "_"),
             )
 
             self.dashboard_area.add_card(

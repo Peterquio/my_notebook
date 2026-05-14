@@ -10,12 +10,14 @@ class EditableDashboardArea(QWidget):
     edit_mode_changed = Signal(bool)
 
     def __init__(
-        self,
-        spacing: int = 20,
+            self,
+            spacing: int = 20,
+            on_save_layout=None,
     ):
         super().__init__()
 
         self.card_slots = []
+        self.on_save_layout = on_save_layout
 
         self.toolbar = DashboardToolbar()
         self.dashboard_grid = DashboardGrid(
@@ -69,8 +71,13 @@ class EditableDashboardArea(QWidget):
 
         if enabled:
             self.dashboard_grid.create_layout_snapshot()
-        else:
+            else:
             self.dashboard_grid.confirm_layout_changes()
+
+            if self.on_save_layout is not None:
+                self.on_save_layout(
+                    self.dashboard_grid.get_layout_items()
+                )
 
         self.dashboard_grid.set_edit_mode(enabled)
 

@@ -16,4 +16,5 @@ def gerar_card_financeiro(
     return CardSlot(
         card,
         size=card_data.get("size", "1x1"),
+        card_id=card_data.get("id"),
     )
