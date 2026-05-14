@@ -1,8 +1,6 @@
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QPoint
 from PySide6.QtWidgets import QFrame
 from PySide6.QtGui import QRegion, QPainterPath
-from PySide6.QtCore import QRect
-
 
 class CardSlot(QFrame):
     def __init__(

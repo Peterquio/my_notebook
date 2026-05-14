@@ -175,6 +175,29 @@ class MainWindow(QMainWindow):
                 font-size: 22px;
             }}
 
+            #AddCardButton {{
+                background-color: rgba(255, 255, 255, 235);
+                border: 1px dashed rgba(148, 163, 184, 150);
+                border-radius: 22px;
+            }}
+            
+            #AddCardButton:hover {{
+                background-color: rgba(255, 255, 255, 255);
+                border: 2px dashed rgba(37, 99, 235, 150);
+            }}
+            
+            #AddCardPlus {{
+                font-size: 42px;
+                font-weight: 700;
+                color: rgba(37, 99, 235, 170);
+            }}
+            
+            #AddCardText {{
+                font-size: 13px;
+                font-weight: 600;
+                color: rgba(71, 85, 105, 220);
+            }}
+
             #EditButton {{
                 background-color: white;
                 border: none;

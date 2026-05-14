@@ -1,7 +1,9 @@
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea, QFrame
+from ui.widgets.add_card_button import AddCardButton
 
 class DashboardGrid(QWidget):
+    add_card_requested = Signal()
     def __init__(
         self,
         min_cell_width: int = 240,
@@ -19,9 +21,19 @@ class DashboardGrid(QWidget):
         self.items = []
         self.occupied_cells = []
         self.card_positions = {}
+        self._layout_snapshot = None
         self.current_columns = 1
         self.drop_preview = QFrame(self)
         self.drop_preview.hide()
+
+        self.edit_mode = False
+
+        self.add_card_button = AddCardButton()
+        self.add_card_button.hide()
+
+        self.add_card_button.clicked.connect(
+            self.add_card_requested.emit
+        )
 
         self.debug_show_cells = False
         self.debug_cell_frames = []
@@ -675,6 +687,118 @@ class DashboardGrid(QWidget):
                 width_units,
                 height_units,
             )
+
+    def _find_add_card_position(self) -> tuple[int, int]:
+        if not self.card_positions:
+            return 0, 0
+
+        occupied_cells = set()
+
+        for widget, position in self.card_positions.items():
+            if widget == self.add_card_button:
+                continue
+
+            row = position["row"]
+            column = position["column"]
+            width_units = position["width_units"]
+            height_units = position["height_units"]
+
+            for r in range(row, row + height_units):
+                for c in range(column, column + width_units):
+                    occupied_cells.add((r, c))
+
+        if not occupied_cells:
+            return 0, 0
+
+        last_row = max(
+            row
+            for row, column in occupied_cells
+        )
+
+        occupied_columns_in_last_row = [
+            column
+            for row, column in occupied_cells
+            if row == last_row
+        ]
+
+        last_column = max(occupied_columns_in_last_row)
+
+        next_column = last_column + 1
+
+        if next_column < self.current_columns:
+            return last_row, next_column
+
+        return last_row + 1, 0
+
+    def create_layout_snapshot(self) -> None:
+        self._layout_snapshot = {
+            widget: position.copy()
+            for widget, position in self.card_positions.items()
+            if widget != self.add_card_button
+        }
+
+    def restore_layout_snapshot(self) -> None:
+        if self._layout_snapshot is None:
+            return
+
+        self.card_positions = {
+            widget: position.copy()
+            for widget, position in self._layout_snapshot.items()
+        }
+
+        if self.add_card_button in self.card_positions:
+            del self.card_positions[self.add_card_button]
+
+        self._layout_snapshot = None
+        self._rebuild_grid_from_positions()
+
+    def confirm_layout_changes(self) -> None:
+        self._layout_snapshot = None
+
+    def set_edit_mode(
+            self,
+            enabled: bool,
+    ) -> None:
+
+        self.edit_mode = enabled
+
+        existing = any(
+            item["widget"] == self.add_card_button
+            for item in self.items
+        )
+
+        if enabled and not existing:
+            self.items.append(
+                {
+                    "widget": self.add_card_button,
+                    "size": "1x1",
+                }
+            )
+
+            width_units, height_units = self._parse_size("1x1")
+
+            row, column = self._find_add_card_position()
+
+            self.card_positions[self.add_card_button] = {
+                "row": row,
+                "column": column,
+                "width_units": width_units,
+                "height_units": height_units,
+            }
+
+        elif not enabled and existing:
+            self.items = [
+                item
+                for item in self.items
+                if item["widget"] != self.add_card_button
+            ]
+
+            if self.add_card_button in self.card_positions:
+                del self.card_positions[self.add_card_button]
+
+            self.add_card_button.hide()
+
+        self._rebuild_grid_from_positions()
 
     def start_drag_auto_scroll(self) -> None:
         self._drag_auto_scroll_active = True

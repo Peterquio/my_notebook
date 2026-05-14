@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
-from ui.widgets.dashboard_grid import DashboardGrid
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.app_card import AppCard
 from ui.widgets.card_slot import CardSlot
-from ui.widgets.dashboard_toolbar import DashboardToolbar
+from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
 
 class DashboardHome(BaseScreen):
@@ -14,30 +14,24 @@ class DashboardHome(BaseScreen):
             subtitle="Visão geral do seu sistema pessoal.",
         )
 
-        self.card_slots = []
         self._criar_widgets()
 
     def _criar_widgets(self) -> None:
-        toolbar = DashboardToolbar()
-
-        toolbar.edit_mode_changed.connect(
-            self._toggle_edit_mode
-        )
-
-        self.dashboard_grid = DashboardGrid(
+        self.dashboard_area = EditableDashboardArea(
             spacing=20,
         )
 
-        toolbar.refresh_requested.connect(
-            self.dashboard_grid.compact_empty_rows
+        self.dashboard_area.edit_mode_changed.connect(
+            self.set_edit_mode
         )
 
-        self.header_actions.addWidget(toolbar)
-        dashboard_grid = self.dashboard_grid
+        self.header_actions.addWidget(
+            self.dashboard_area.toolbar
+        )
 
         content_layout = QVBoxLayout(self.content_area)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addWidget(dashboard_grid)
+        content_layout.addWidget(self.dashboard_area)
         content_layout.setAlignment(Qt.AlignTop)
 
         cards = [
@@ -45,10 +39,10 @@ class DashboardHome(BaseScreen):
             ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "2x1"),
             ("Planner", "4", "metas ativas", "🗓️", "1x2"),
             ("Diário", "18", "registros salvos", "📖", "1x1"),
-            ("Planejamento Hopi Hari", "5", "Orçamento", "🎡", "3x3")
+            ("Planejamento Hopi Hari", "5", "Orçamento", "🎡", "3x3"),
         ]
 
-        for index, (title, value, subtitle, icon, size) in enumerate(cards):
+        for title, value, subtitle, icon, size in cards:
             card = AppCard(
                 title=title,
                 value=value,
@@ -61,19 +55,7 @@ class DashboardHome(BaseScreen):
                 size=size,
             )
 
-            self.card_slots.append(slot)
-
-            dashboard_grid.add_card(
+            self.dashboard_area.add_card(
                 slot,
                 size=size,
             )
-
-    def _toggle_edit_mode(
-            self,
-            enabled: bool,
-    ) -> None:
-
-        self.set_edit_mode(enabled)
-
-        for slot in self.card_slots:
-            slot.set_edit_mode(enabled)
