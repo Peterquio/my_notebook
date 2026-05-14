@@ -140,6 +140,10 @@ class MainWindow(QMainWindow):
                 border-radius: {CARD_RADIUS};
             }}
 
+            #AppCard[hovered="true"] {{
+                border: 1px solid rgba(99, 102, 241, 120);
+            }}
+
             #AppCard[pressed="true"] {{
                 background-color: {CARD_ACTIVE_BG};
                 border: 1px solid {CARD_ACTIVE_BORDER};

@@ -24,10 +24,16 @@ class DashboardHome(BaseScreen):
             self._toggle_edit_mode
         )
 
-        self.header_actions.addWidget(toolbar)
-        dashboard_grid = DashboardGrid(
+        self.dashboard_grid = DashboardGrid(
             spacing=20,
         )
+
+        toolbar.refresh_requested.connect(
+            self.dashboard_grid.compact_empty_rows
+        )
+
+        self.header_actions.addWidget(toolbar)
+        dashboard_grid = self.dashboard_grid
 
         content_layout = QVBoxLayout(self.content_area)
         content_layout.setContentsMargins(0, 0, 0, 0)

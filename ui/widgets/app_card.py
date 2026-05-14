@@ -2,7 +2,9 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QSize,
-    QParallelAnimationGroup
+    QPoint,
+    QParallelAnimationGroup,
+    Qt,
 )
 
 from PySide6.QtGui import QColor
@@ -35,6 +37,10 @@ class AppCard(QFrame):
         )
 
         self.setFixedSize(self.default_size)
+        self.setCursor(Qt.PointingHandCursor)
+
+        self._normal_pos = None
+        self._hover_offset = QPoint(6, -6)
 
         self.setObjectName("AppCard")
 

@@ -226,7 +226,7 @@ class CardSlot(QFrame):
                     height_units=self.height_units,
                 )
 
-                if can_drop and len(conflicts) == 0:
+                if can_drop:
                     dashboard_grid.move_card_to(
                         self,
                         row=row,
@@ -254,30 +254,24 @@ class CardSlot(QFrame):
             self.setStyleSheet(self.default_style)
 
     def enterEvent(self, event) -> None:
-        self.card.set_hovered(True)
-
-        if not self.edit_mode:
-            super().enterEvent(event)
-            return
-
         self.animation.stop()
         self.animation.setStartValue(self.card.geometry())
         self.animation.setEndValue(self._hover_geometry())
         self.animation.start()
 
+        if not self.edit_mode:
+            self.card.set_hovered(True)
+
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self.card.set_hovered(False)
-
-        if not self.edit_mode:
-            super().leaveEvent(event)
-            return
-
         self.animation.stop()
         self.animation.setStartValue(self.card.geometry())
         self.animation.setEndValue(self._default_geometry())
         self.animation.start()
+
+        if not self.edit_mode:
+            self.card.set_hovered(False)
 
         super().leaveEvent(event)
 

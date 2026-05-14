@@ -23,7 +23,7 @@ class DashboardGrid(QWidget):
         self.drop_preview = QFrame(self)
         self.drop_preview.hide()
 
-        self.debug_show_cells = True
+        self.debug_show_cells = False
         self.debug_cell_frames = []
 
         self.layout = QGridLayout(self)
@@ -370,14 +370,16 @@ class DashboardGrid(QWidget):
         width_units = position["width_units"]
         height_units = position["height_units"]
 
-        self.layout.removeWidget(widget)
+        if column + width_units > self.current_columns:
+            return
 
-        self.card_positions[widget] = {
-            "row": row,
-            "column": column,
-            "width_units": width_units,
-            "height_units": height_units,
-        }
+        self._move_card_with_push(
+            widget,
+            row,
+            column,
+            width_units,
+            height_units,
+        )
 
         self._rebuild_grid_from_positions()
 
@@ -447,6 +449,112 @@ class DashboardGrid(QWidget):
         self._update_minimum_grid_height()
         self._update_debug_cells()
 
+    def _move_card_with_push(
+            self,
+            moved_widget,
+            target_row: int,
+            target_column: int,
+            width_units: int,
+            height_units: int,
+    ) -> None:
+
+        old_positions = {
+            widget: position.copy()
+            for widget, position in self.card_positions.items()
+        }
+
+        ordered_widgets = sorted(
+            old_positions.keys(),
+            key=lambda widget: (
+                old_positions[widget]["row"],
+                old_positions[widget]["column"],
+            ),
+        )
+
+        self.card_positions = {}
+        self.occupied_cells = []
+
+        self.card_positions[moved_widget] = {
+            "row": target_row,
+            "column": target_column,
+            "width_units": width_units,
+            "height_units": height_units,
+        }
+
+        self._mark_cells_as_occupied(
+            target_row,
+            target_column,
+            width_units,
+            height_units,
+        )
+
+        for widget in ordered_widgets:
+            if widget == moved_widget:
+                continue
+
+            old_position = old_positions[widget]
+
+            old_row = old_position["row"]
+            old_column = old_position["column"]
+            old_width_units = old_position["width_units"]
+            old_height_units = old_position["height_units"]
+
+            if self._can_place_card(
+                    old_row,
+                    old_column,
+                    old_width_units,
+                    old_height_units,
+            ):
+                new_row = old_row
+                new_column = old_column
+            else:
+                new_row, new_column = self._find_available_position_from(
+                    old_row,
+                    old_column,
+                    old_width_units,
+                    old_height_units,
+                )
+
+            self.card_positions[widget] = {
+                "row": new_row,
+                "column": new_column,
+                "width_units": old_width_units,
+                "height_units": old_height_units,
+            }
+
+            self._mark_cells_as_occupied(
+                new_row,
+                new_column,
+                old_width_units,
+                old_height_units,
+            )
+
+    def _find_available_position_from(
+            self,
+            start_row: int,
+            start_column: int,
+            width_units: int,
+            height_units: int,
+    ) -> tuple[int, int]:
+
+        row = start_row
+        column = start_column
+
+        while True:
+            while column < self.current_columns:
+                if self._can_place_card(
+                        row,
+                        column,
+                        width_units,
+                        height_units,
+                ):
+                    return row, column
+
+                column += 1
+
+            row += 1
+            column = 0
+
     def compact_empty_rows(self) -> None:
         used_rows = sorted({
             position["row"]
@@ -504,6 +612,32 @@ class DashboardGrid(QWidget):
                 return True
 
         return False
+
+    def compact_empty_rows(self) -> None:
+        if not self.card_positions:
+            return
+
+        occupied_rows = set()
+
+        for position in self.card_positions.values():
+            row = position["row"]
+            height_units = position["height_units"]
+
+            for r in range(row, row + height_units):
+                occupied_rows.add(r)
+
+        ordered_rows = sorted(occupied_rows)
+
+        row_map = {
+            old_row: new_row
+            for new_row, old_row in enumerate(ordered_rows)
+        }
+
+        for position in self.card_positions.values():
+            old_row = position["row"]
+            position["row"] = row_map[old_row]
+
+        self._rebuild_grid_from_positions()
 
     def _reflow_cards_after_column_reduction(self) -> None:
         ordered_cards = sorted(
