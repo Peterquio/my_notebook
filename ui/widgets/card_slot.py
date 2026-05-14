@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QPoint
-from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QFrame, QPushButton
 from PySide6.QtGui import QRegion, QPainterPath
 
 class CardSlot(QFrame):
@@ -45,6 +45,17 @@ class CardSlot(QFrame):
 
         self.card.setParent(self)
 
+        self.delete_button = QPushButton("×", self)
+        self.delete_button.setObjectName("DeleteCardButton")
+        self.delete_button.setFixedSize(24, 24)
+        self.delete_button.setCursor(Qt.PointingHandCursor)
+
+        self.delete_button.hide()
+
+        self.delete_button.clicked.connect(
+            self._delete_card
+        )
+
         self.animation = QPropertyAnimation(
             self.card,
             b"geometry",
@@ -79,6 +90,7 @@ class CardSlot(QFrame):
         self.card.setGeometry(
             self._default_geometry()
         )
+        self._position_delete_button()
 
     def _default_geometry(self) -> QRect:
         x = (self.hover_width - self.default_width) // 2
@@ -104,8 +116,16 @@ class CardSlot(QFrame):
 
         if enabled:
             self.setCursor(Qt.OpenHandCursor)
+            self.card.setCursor(Qt.OpenHandCursor)
+
+            self.delete_button.show()
+            self.delete_button.raise_()
+
         else:
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.PointingHandCursor)
+            self.card.setCursor(Qt.PointingHandCursor)
+
+            self.delete_button.hide()
             self.animation.stop()
             self.card.setGeometry(
                 self._default_geometry()
@@ -114,6 +134,8 @@ class CardSlot(QFrame):
     def mousePressEvent(self, event) -> None:
         if self.edit_mode:
             self.setCursor(Qt.ClosedHandCursor)
+            self.card.setCursor(Qt.ClosedHandCursor)
+            self.delete_button.setCursor(Qt.PointingHandCursor)
             self.card.set_pressed(True)
             self.drag_start_position = event.position().toPoint()
             self.dragging = False
@@ -134,6 +156,7 @@ class CardSlot(QFrame):
             self.dragging = True
             self.card.set_dragging(True)
             self.setCursor(Qt.ClosedHandCursor)
+            self.card.setCursor(Qt.ClosedHandCursor)
             self._create_drag_ghost()
             self._move_drag_ghost(event.globalPosition().toPoint())
 
@@ -192,6 +215,8 @@ class CardSlot(QFrame):
     def mouseReleaseEvent(self, event) -> None:
         if self.edit_mode:
             self.setCursor(Qt.OpenHandCursor)
+            self.card.setCursor(Qt.OpenHandCursor)
+            self.delete_button.setCursor(Qt.PointingHandCursor)
             self.card.set_pressed(False)
 
         self.card.set_dragging(False)
@@ -272,6 +297,22 @@ class CardSlot(QFrame):
             self.card.set_hovered(False)
 
         super().leaveEvent(event)
+
+    def _position_delete_button(self) -> None:
+        margin = 8
+
+        self.delete_button.move(
+            self.width() - self.delete_button.width() - margin,
+            margin,
+        )
+
+    def _delete_card(self) -> None:
+        dashboard_grid = self._find_dashboard_grid()
+
+        if dashboard_grid is None:
+            return
+
+        dashboard_grid.remove_card(self)
 
     def _create_drag_ghost(self) -> None:
         if self.drag_ghost is not None:

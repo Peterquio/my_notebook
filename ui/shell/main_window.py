@@ -198,6 +198,19 @@ class MainWindow(QMainWindow):
                 color: rgba(71, 85, 105, 220);
             }}
 
+            #DeleteCardButton {{
+                background-color: rgba(239, 68, 68, 230);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 15px;
+                font-weight: 700;
+            }}
+            
+            #DeleteCardButton:hover {{
+                background-color: rgba(220, 38, 38, 255);
+            }}
+
             #EditButton {{
                 background-color: white;
                 border: none;

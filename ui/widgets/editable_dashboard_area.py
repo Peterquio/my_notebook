@@ -39,7 +39,7 @@ class EditableDashboardArea(QWidget):
         )
 
         self.toolbar.refresh_requested.connect(
-            self.dashboard_grid.compact_empty_rows
+            self.compact_empty_rows
         )
 
         self.toolbar.cancel_requested.connect(
@@ -87,3 +87,7 @@ class EditableDashboardArea(QWidget):
             slot.set_edit_mode(False)
 
         self.edit_mode_changed.emit(False)
+
+    def compact_empty_rows(self) -> None:
+        print("[AREA] Botão refresh clicado -> compact_empty_rows chamado")
+        self.dashboard_grid.compact_empty_rows()
