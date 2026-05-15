@@ -1,16 +1,15 @@
 from sqlite3 import Connection
-
+import json
 
 class DashboardLayoutRepository:
     def __init__(self, conexao: Connection):
         self.conexao = conexao
 
     def salvar_layout(
-        self,
-        module_name: str,
-        layout_items: list[dict],
+            self,
+            module_name: str,
+            layout_items: list[dict],
     ) -> None:
-
         cursor = self.conexao.cursor()
 
         cursor.execute(
@@ -27,17 +26,24 @@ class DashboardLayoutRepository:
                 INSERT INTO dashboard_layouts (
                     module_name,
                     card_id,
+                    card_type,
+                    config_json,
                     row,
                     column,
                     width_units,
                     height_units,
                     sort_order
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     module_name,
                     item["card_id"],
+                    item["card_type"],
+                    json.dumps(
+                        item.get("config", {}),
+                        ensure_ascii=False,
+                    ),
                     item["row"],
                     item["column"],
                     item["width_units"],
@@ -49,8 +55,8 @@ class DashboardLayoutRepository:
         self.conexao.commit()
 
     def listar_layout(
-        self,
-        module_name: str,
+            self,
+            module_name: str,
     ) -> list[dict]:
 
         cursor = self.conexao.cursor()
@@ -59,6 +65,8 @@ class DashboardLayoutRepository:
             """
             SELECT
                 card_id,
+                card_type,
+                config_json,
                 row,
                 column,
                 width_units,
@@ -71,7 +79,15 @@ class DashboardLayoutRepository:
             (module_name,),
         )
 
-        return [
-            dict(row)
-            for row in cursor.fetchall()
-        ]
+        layout_items = []
+
+        for row in cursor.fetchall():
+            item = dict(row)
+
+            item["config"] = json.loads(
+                item.pop("config_json") or "{}"
+            )
+
+            layout_items.append(item)
+
+        return layout_items

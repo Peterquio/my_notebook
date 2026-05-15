@@ -143,6 +143,31 @@ class DashboardGrid(QWidget):
 
         self._rebuild_grid_from_positions()
 
+    def add_card_at(
+            self,
+            widget,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
+    ) -> None:
+
+        self.items.append(
+            {
+                "widget": widget,
+                "size": f"{width_units}x{height_units}",
+            }
+        )
+
+        self.card_positions[widget] = {
+            "row": row,
+            "column": column,
+            "width_units": width_units,
+            "height_units": height_units,
+        }
+
+        self._rebuild_grid_from_positions()
+
     def resizeEvent(self, event) -> None:
         if self.card_positions:
             self._rebuild_grid_from_positions()
@@ -325,7 +350,11 @@ class DashboardGrid(QWidget):
 
         conflicting_cards = []
 
-        for widget, position in self.card_positions.items():
+        for widget, position in list(self.card_positions.items()):
+
+            if widget == self.add_card_button and not self.edit_mode:
+                widget.hide()
+                continue
             widget_cells = set()
 
             widget_row = position["row"]
@@ -535,7 +564,10 @@ class DashboardGrid(QWidget):
             cell_height,
         )
 
-        for widget, position in self.card_positions.items():
+        for widget, position in list(self.card_positions.items()):
+
+            if widget == self.add_card_button and not self.edit_mode:
+                continue
             row = position["row"]
             column = position["column"]
             width_units = position["width_units"]
@@ -608,6 +640,9 @@ class DashboardGrid(QWidget):
             if widget == moved_widget:
                 continue
 
+            if widget == self.add_card_button:
+                continue
+
             old_position = old_positions[widget]
 
             old_row = old_position["row"]
@@ -670,60 +705,6 @@ class DashboardGrid(QWidget):
 
             row += 1
             column = 0
-
-    def compact_empty_rows(self) -> None:
-        print("\n[COMPACT] ===========================")
-        print("[COMPACT] Iniciando compact_empty_rows")
-
-        if not self.card_positions:
-            print("[COMPACT] Nenhum card encontrado")
-            return
-
-        print("\n[COMPACT] card_positions ANTES:")
-        for widget, position in self.card_positions.items():
-            print(
-                widget,
-                "->",
-                position,
-            )
-
-        occupied_rows = set()
-
-        for position in self.card_positions.values():
-            row = position["row"]
-            height_units = position["height_units"]
-
-            for r in range(row, row + height_units):
-                occupied_rows.add(r)
-
-        print("\n[COMPACT] occupied_rows:")
-        print(sorted(occupied_rows))
-
-        ordered_rows = sorted(occupied_rows)
-
-        row_map = {
-            old_row: new_row
-            for new_row, old_row in enumerate(ordered_rows)
-        }
-
-        print("\n[COMPACT] row_map:")
-        print(row_map)
-
-        for position in self.card_positions.values():
-            old_row = position["row"]
-
-            position["row"] = row_map[old_row]
-
-        print("\n[COMPACT] card_positions DEPOIS:")
-        for widget, position in self.card_positions.items():
-            print(
-                widget,
-                "->",
-                position,
-            )
-
-        print("\n[COMPACT] Chamando rebuild...")
-        self._rebuild_grid_from_positions()
 
     def _apply_widget_span_size(
             self,
@@ -880,6 +861,8 @@ class DashboardGrid(QWidget):
                 continue
 
             card_id = getattr(widget, "card_id", None)
+            card_type = getattr(widget, "card_type", None)
+            card_config = getattr(widget, "card_config", {})
 
             if not card_id:
                 continue
@@ -887,6 +870,9 @@ class DashboardGrid(QWidget):
             layout_items.append(
                 {
                     "card_id": card_id,
+                    "card_type": card_type,
+                    "config": card_config,
+
                     "row": position["row"],
                     "column": position["column"],
                     "width_units": position["width_units"],
@@ -956,6 +942,33 @@ class DashboardGrid(QWidget):
     def confirm_layout_changes(self) -> None:
         self._layout_snapshot = None
 
+    def _remove_add_card_button(self) -> None:
+        self.items = [
+            item
+            for item in self.items
+            if item["widget"] != self.add_card_button
+        ]
+
+        if self.add_card_button in self.card_positions:
+            del self.card_positions[self.add_card_button]
+
+        self.add_card_button.hide()
+        self.add_card_button.setParent(None)
+
+    def _force_hide_add_card_button(self) -> None:
+        self.items = [
+            item
+            for item in self.items
+            if item["widget"] != self.add_card_button
+        ]
+
+        if self.add_card_button in self.card_positions:
+            del self.card_positions[self.add_card_button]
+
+        self.layout.removeWidget(self.add_card_button)
+        self.add_card_button.hide()
+        self.add_card_button.setParent(None)
+
     def set_edit_mode(
             self,
             enabled: bool,
@@ -963,18 +976,19 @@ class DashboardGrid(QWidget):
 
         self.edit_mode = enabled
 
-        existing = any(
-            item["widget"] == self.add_card_button
-            for item in self.items
-        )
-
-        if enabled and not existing:
-            self.items.append(
-                {
-                    "widget": self.add_card_button,
-                    "size": "1x1",
-                }
+        if enabled:
+            existing = any(
+                item["widget"] == self.add_card_button
+                for item in self.items
             )
+
+            if not existing:
+                self.items.append(
+                    {
+                        "widget": self.add_card_button,
+                        "size": "1x1",
+                    }
+                )
 
             width_units, height_units = self._parse_size("1x1")
 
@@ -987,19 +1001,16 @@ class DashboardGrid(QWidget):
                 "height_units": height_units,
             }
 
-        elif not enabled and existing:
-            self.items = [
-                item
-                for item in self.items
-                if item["widget"] != self.add_card_button
-            ]
+            self.add_card_button.setParent(self)
+            self.add_card_button.show()
 
-            if self.add_card_button in self.card_positions:
-                del self.card_positions[self.add_card_button]
-
-            self.add_card_button.hide()
+        else:
+            self._force_hide_add_card_button()
 
         self._rebuild_grid_from_positions()
+
+        if not enabled:
+            self._force_hide_add_card_button()
 
     def start_drag_auto_scroll(self) -> None:
         self._drag_auto_scroll_active = True

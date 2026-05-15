@@ -1,12 +1,20 @@
-from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QVBoxLayout
+
+from core.dashboard.services.dashboard_card_catalog_controller import (
+    DashboardCardCatalogController,
+)
 
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
-from ui.widgets.card_catalog_dialog import CardCatalogDialog
+
+from core.dashboard.services.dashboard_layout_service import DashboardLayoutService
+from core.dashboard.services.dashboard_card_service import DashboardCardService
+from core.database.database_manager import DatabaseManager
 
 from modules.finance.services.finance_service import FinanceService
 from modules.finance.ui.finance_card_generator import gerar_card_financeiro
+from modules.finance.cards.finance_card_catalog import FINANCE_CARD_CATALOG
 
 
 class FinanceHome(BaseScreen):
@@ -17,19 +25,45 @@ class FinanceHome(BaseScreen):
         )
 
         self.finance_service = FinanceService()
+        self.username = "default"
+
+        DatabaseManager(
+            self.username
+        ).inicializar_banco_usuario()
+
+        self.dashboard_layout_service = DashboardLayoutService(
+            self.username
+        )
+
+        self.dashboard_card_service = DashboardCardService(
+            self.username
+        )
+
+        self.card_catalog_controller = None
+
         self._criar_widgets()
 
     def _criar_widgets(self) -> None:
         self.dashboard_area = EditableDashboardArea(
             spacing=20,
+            on_save_layout=self._salvar_layout_dashboard,
         )
 
         self.dashboard_area.edit_mode_changed.connect(
             self.set_edit_mode
         )
 
+        self.card_catalog_controller = DashboardCardCatalogController(
+            parent=self,
+            module_name="finance",
+            catalog_provider=self.finance_service.listar_cards_disponiveis,
+            card_generator=gerar_card_financeiro,
+            dashboard_area=self.dashboard_area,
+            dashboard_card_service=self.dashboard_card_service,
+        )
+
         self.dashboard_area.add_card_requested.connect(
-            self._abrir_seletor_cards
+            self.card_catalog_controller.abrir_seletor_cards
         )
 
         self.header_actions.addWidget(
@@ -41,31 +75,61 @@ class FinanceHome(BaseScreen):
         content_layout.addWidget(self.dashboard_area)
         content_layout.setAlignment(Qt.AlignTop)
 
-    def _abrir_seletor_cards(self) -> None:
-        dialog = CardCatalogDialog(
-            self.finance_service.listar_cards_disponiveis(),
-            parent=self,
-        )
+        self._carregar_layout_dashboard()
 
-        dialog.card_selected.connect(
-            self._adicionar_card_financeiro
-        )
-
-        dialog.exec()
-
-    def _adicionar_card_financeiro(
+    def _salvar_layout_dashboard(
             self,
-            card_data: dict,
+            layout_items: list[dict],
     ) -> None:
-        slot = gerar_card_financeiro(
-            card_data
+        self.dashboard_layout_service.salvar_layout(
+            module_name="finance",
+            layout_items=layout_items,
         )
 
-        self.dashboard_area.add_card(
-            slot,
-            size=card_data.get("size", "1x1"),
+        print("[FINANCE] Layout salvo no SQLite.")
+
+    def _carregar_layout_dashboard(self) -> None:
+        layout_items = self.dashboard_layout_service.carregar_layout(
+            module_name="finance",
         )
 
-        slot.set_edit_mode(
-            self.dashboard_area.dashboard_grid.edit_mode
-        )
+        catalog_by_type = {
+            card["id"]: card
+            for card in FINANCE_CARD_CATALOG
+        }
+
+        for item in layout_items:
+            template = catalog_by_type.get(
+                item["card_type"],
+                {}
+            )
+
+            card_data = {
+                "id": item["card_id"],
+                "card_type": item["card_type"],
+                "config": item.get("config", {}),
+
+                "title": template.get("title", item["card_type"]),
+                "subtitle": template.get("subtitle", ""),
+                "icon": template.get("icon", ""),
+                "size": template.get(
+                    "size",
+                    f'{item["width_units"]}x{item["height_units"]}',
+                ),
+            }
+
+            slot = gerar_card_financeiro(
+                card_data
+            )
+
+            slot.delete_requested.connect(
+                self.dashboard_card_service.remover_ou_desativar_card
+            )
+
+            self.dashboard_area.add_card_at(
+                slot,
+                row=item["row"],
+                column=item["column"],
+                width_units=item["width_units"],
+                height_units=item["height_units"],
+            )

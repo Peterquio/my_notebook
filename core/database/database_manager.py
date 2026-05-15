@@ -17,12 +17,12 @@ class DatabaseManager:
         self.username = username
         self.database_path = obter_caminho_banco_usuario(username)
 
-    def conectar(self) -> Connection:
+    def get_connection(self) -> Connection:
         inicializar_pastas_database()
         return criar_conexao(self.database_path)
 
     def inicializar_banco_usuario(self) -> None:
-        with self.conectar() as conexao:
+        with self.get_connection() as conexao:
             cursor = conexao.cursor()
 
             cursor.executescript(GLOBAL_SCHEMA)

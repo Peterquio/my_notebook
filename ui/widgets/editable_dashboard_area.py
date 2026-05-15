@@ -64,6 +64,25 @@ class EditableDashboardArea(QWidget):
             size=size,
         )
 
+    def add_card_at(
+            self,
+            slot,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
+    ) -> None:
+
+        self.card_slots.append(slot)
+
+        self.dashboard_grid.add_card_at(
+            slot,
+            row=row,
+            column=column,
+            width_units=width_units,
+            height_units=height_units,
+        )
+
     def set_edit_mode(
             self,
             enabled: bool,
@@ -71,15 +90,16 @@ class EditableDashboardArea(QWidget):
 
         if enabled:
             self.dashboard_grid.create_layout_snapshot()
-            else:
+            self.dashboard_grid.set_edit_mode(True)
+
+        else:
+            self.dashboard_grid.set_edit_mode(False)
             self.dashboard_grid.confirm_layout_changes()
 
             if self.on_save_layout is not None:
                 self.on_save_layout(
                     self.dashboard_grid.get_layout_items()
                 )
-
-        self.dashboard_grid.set_edit_mode(enabled)
 
         for slot in self.card_slots:
             slot.set_edit_mode(enabled)

@@ -1,8 +1,9 @@
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QPoint
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QPoint, Signal
 from PySide6.QtWidgets import QFrame, QPushButton
 from PySide6.QtGui import QRegion, QPainterPath
 
 class CardSlot(QFrame):
+    delete_requested = Signal(str, dict)
     def __init__(
             self,
             card,
@@ -321,6 +322,11 @@ class CardSlot(QFrame):
         )
 
     def _delete_card(self) -> None:
+        self.delete_requested.emit(
+            self.card_id,
+            getattr(self, "card_config", {}),
+        )
+
         dashboard_grid = self._find_dashboard_grid()
 
         if dashboard_grid is None:

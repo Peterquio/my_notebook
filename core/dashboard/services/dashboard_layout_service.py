@@ -1,5 +1,5 @@
 from core.database.database_manager import DatabaseManager
-from modules.dashboard.repositories.dashboard_layout_repository import (
+from core.dashboard.repositories.dashboard_layout_repository import (
     DashboardLayoutRepository,
 )
 
@@ -19,7 +19,7 @@ class DashboardLayoutService:
 
         database_manager = DatabaseManager(self.username)
 
-        with database_manager.conectar() as conexao:
+        with database_manager.get_connection() as conexao:
             repository = DashboardLayoutRepository(conexao)
 
             repository.salvar_layout(
@@ -34,7 +34,7 @@ class DashboardLayoutService:
 
         database_manager = DatabaseManager(self.username)
 
-        with database_manager.conectar() as conexao:
+        with database_manager.get_connection() as conexao:
             repository = DashboardLayoutRepository(conexao)
 
             return repository.listar_layout(

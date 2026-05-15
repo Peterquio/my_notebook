@@ -16,7 +16,7 @@ class LoginService:
         database_manager = DatabaseManager(username)
 
         try:
-            with database_manager.conectar() as conexao:
+            with database_manager.get_connection() as conexao:
                 cursor = conexao.cursor()
 
                 cursor.execute("""

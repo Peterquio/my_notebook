@@ -35,19 +35,46 @@ VALUES (
     'pt-BR'
 );
 
-
 CREATE TABLE IF NOT EXISTS dashboard_layouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+
     module_name TEXT NOT NULL,
+
     card_id TEXT NOT NULL,
+    card_type TEXT NOT NULL,
+    config_json TEXT DEFAULT '{}',
+
     row INTEGER NOT NULL,
     column INTEGER NOT NULL,
+
     width_units INTEGER NOT NULL,
     height_units INTEGER NOT NULL,
+
     sort_order INTEGER DEFAULT 0,
+
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(module_name, card_id)
 );
+
+CREATE TABLE IF NOT EXISTS dashboard_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    card_id TEXT NOT NULL UNIQUE,
+    module_name TEXT NOT NULL,
+
+    card_type TEXT NOT NULL,
+
+    title TEXT,
+    size TEXT,
+
+    config_json TEXT DEFAULT '{}',
+
+    is_active INTEGER DEFAULT 1,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 """
