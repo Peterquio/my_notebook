@@ -12,6 +12,7 @@ class DashboardCardCatalogController:
             module_name: str,
             catalog_provider,
             card_generator,
+            card_data_factory,
             dashboard_area,
             dashboard_card_service,
     ) -> None:
@@ -20,6 +21,7 @@ class DashboardCardCatalogController:
         self.module_name = module_name
         self.catalog_provider = catalog_provider
         self.card_generator = card_generator
+        self.card_data_factory = card_data_factory
         self.dashboard_area = dashboard_area
         self.dashboard_card_service = dashboard_card_service
         self.card_catalog_dialog = None
@@ -65,14 +67,9 @@ class DashboardCardCatalogController:
             card_data: dict,
     ) -> None:
 
-        card_data = card_data.copy()
-
-        template_id = card_data["id"]
-
-        card_data["id"] = str(uuid.uuid4())
-        card_data["card_type"] = template_id
-
-        card_config = {}
+        card_data = self.card_data_factory(
+            card_data
+        )
 
         if template_id == "credit_card":
             setup_dialog = CreditCardSetupDialog(

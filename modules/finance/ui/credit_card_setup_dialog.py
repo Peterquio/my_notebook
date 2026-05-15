@@ -216,9 +216,18 @@ class CreditCardSetupDialog(QDialog):
         return int(round(value * 100))
 
     def get_data(self) -> dict:
+        asset = self._get_selected_asset()
+
         return {
             "name": self.name_input.text().strip() or "Meu Cartão",
             "asset_id": self.selected_asset_id,
+
+            "bank_name": asset.get("bank_name"),
+            "asset_name": asset.get("asset_name"),
+            "background_type": asset.get("background_type", "color"),
+            "background_value": asset.get("background_value", "#2563EB"),
+            "text_color": asset.get("text_color", "#FFFFFF"),
+
             "limit_amount_cents": self._parse_money_to_cents(
                 self.limit_input.text()
             ),
