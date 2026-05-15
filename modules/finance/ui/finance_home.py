@@ -4,7 +4,9 @@ from PySide6.QtWidgets import QVBoxLayout
 from core.dashboard.services.dashboard_card_catalog_controller import (
     DashboardCardCatalogController,
 )
-
+from modules.finance.services.credit_card_service import (
+    CreditCardService,
+)
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -26,6 +28,10 @@ class FinanceHome(BaseScreen):
 
         self.finance_service = FinanceService()
         self.username = "default"
+
+        self.credit_card_service = CreditCardService(
+            self.username
+        )
 
         DatabaseManager(
             self.username

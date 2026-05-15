@@ -526,6 +526,9 @@ class DashboardGrid(QWidget):
             height_units,
         )
 
+        if self.edit_mode:
+            self._update_add_card_button_position()
+
         self._rebuild_grid_from_positions()
 
     def _rebuild_grid_from_positions(self) -> None:
@@ -969,6 +972,27 @@ class DashboardGrid(QWidget):
         self.add_card_button.hide()
         self.add_card_button.setParent(None)
 
+    def _update_add_card_button_position(self) -> None:
+        if not self.edit_mode:
+            return
+
+        if self.add_card_button not in self.items:
+            self.items.append(
+                {
+                    "widget": self.add_card_button,
+                    "size": "1x1",
+                }
+            )
+
+        row, column = self._find_add_card_position()
+
+        self.card_positions[self.add_card_button] = {
+            "row": row,
+            "column": column,
+            "width_units": 1,
+            "height_units": 1,
+        }
+
     def set_edit_mode(
             self,
             enabled: bool,
@@ -990,16 +1014,7 @@ class DashboardGrid(QWidget):
                     }
                 )
 
-            width_units, height_units = self._parse_size("1x1")
-
-            row, column = self._find_add_card_position()
-
-            self.card_positions[self.add_card_button] = {
-                "row": row,
-                "column": column,
-                "width_units": width_units,
-                "height_units": height_units,
-            }
+            self._update_add_card_button_position()
 
             self.add_card_button.setParent(self)
             self.add_card_button.show()
