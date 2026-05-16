@@ -180,4 +180,62 @@ CREATE TABLE IF NOT EXISTS finance_credit_cards (
         REFERENCES finance_credit_card_assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS finance_credit_card_invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    credit_card_id INTEGER NOT NULL,
+
+    invoice_year INTEGER NOT NULL,
+    invoice_month INTEGER NOT NULL,
+
+    closing_date TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'open',
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(credit_card_id, invoice_year, invoice_month),
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    credit_card_id INTEGER NOT NULL,
+    invoice_id INTEGER,
+
+    category_id INTEGER DEFAULT 1,
+
+    description TEXT NOT NULL,
+
+    purchase_date TEXT NOT NULL,
+    billing_date TEXT NOT NULL,
+
+    installment_number INTEGER NOT NULL DEFAULT 1,
+    installment_total INTEGER NOT NULL DEFAULT 1,
+
+    amount_cents INTEGER NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'pending',
+
+    original_expense_group_id TEXT,
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id),
+
+    FOREIGN KEY (invoice_id)
+        REFERENCES finance_credit_card_invoices(id),
+
+    FOREIGN KEY (category_id)
+        REFERENCES finance_categories(id)
+);
 """

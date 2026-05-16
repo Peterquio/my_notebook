@@ -99,6 +99,10 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
                 "closing_day": credit_card["closing_day"],
                 "due_day": credit_card["due_day"],
                 "last_four_digits": credit_card["last_four_digits"],
+                "current_invoice_amount_cents": self.credit_card_service.obter_total_fatura_atual(
+                    credit_card_id=credit_card["id"],
+                    closing_day=credit_card["closing_day"],
+                ),
             }
         )
 

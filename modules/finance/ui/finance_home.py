@@ -1,5 +1,10 @@
+from datetime import date
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import (
+    QVBoxLayout,
+    QPushButton,
+    QMessageBox,
+)
 
 from core.dashboard.services.dashboard_card_catalog_controller import (
     DashboardCardCatalogController,
@@ -9,8 +14,16 @@ from modules.finance.dashboard.finance_dashboard_card_registry import (
     FinanceDashboardCardRegistry,
 )
 
+from modules.finance.services.credit_card_expense_service import (
+    CreditCardExpenseService,
+)
+
 from modules.finance.services.credit_card_service import (
     CreditCardService,
+)
+
+from modules.finance.ui.credit_card_detail_window import (
+    CreditCardDetailWindow,
 )
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
@@ -22,7 +35,6 @@ from core.database.database_manager import DatabaseManager
 from modules.finance.services.finance_service import FinanceService
 from modules.finance.ui.finance_card_generator import gerar_card_financeiro
 from modules.finance.cards.finance_card_catalog import FINANCE_CARD_CATALOG
-
 
 class FinanceHome(BaseScreen):
     def __init__(self):
@@ -41,6 +53,10 @@ class FinanceHome(BaseScreen):
         self.dashboard_card_registry = FinanceDashboardCardRegistry(
             card_generator=gerar_card_financeiro,
             credit_card_service=self.credit_card_service,
+        )
+
+        self.credit_card_expense_service = CreditCardExpenseService(
+            self.username
         )
 
         DatabaseManager(
@@ -87,6 +103,18 @@ class FinanceHome(BaseScreen):
             self.dashboard_area.toolbar
         )
 
+        self.btn_teste_compra_cartao = QPushButton(
+            "Teste compra cartão"
+        )
+
+        self.btn_teste_compra_cartao.clicked.connect(
+            self._registrar_compra_teste_cartao
+        )
+
+        self.header_actions.addWidget(
+            self.btn_teste_compra_cartao
+        )
+
         content_layout = QVBoxLayout(self.content_area)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.addWidget(self.dashboard_area)
@@ -106,62 +134,37 @@ class FinanceHome(BaseScreen):
         print("[FINANCE] Layout salvo no SQLite.")
 
     def _carregar_layout_dashboard(self) -> None:
-        layout_items = self.dashboard_layout_service.carregar_layout(
-            module_name="finance",
+        layout_salvo = self.dashboard_layout_service.carregar_layout(
+            module_name="finance"
         )
+
+        if not layout_salvo:
+            return
 
         catalog_by_type = {
             card["id"]: card
             for card in FINANCE_CARD_CATALOG
         }
 
-        for item in layout_items:
+        for item in layout_salvo:
             template = catalog_by_type.get(
                 item["card_type"],
                 {}
             )
 
-            config = item.get("config", {})
+            card_data = self.dashboard_card_registry.hydrate_card_data(
+                layout_item=item,
+                template_data=template,
+            )
 
-            #if item["card_type"] == "credit_card":
-            #    credit_card = self.credit_card_service.buscar_por_dashboard_card_id(
-            #       item["card_id"]
-            #   )
-
-            #    if credit_card is not None:
-            #        config.update(
-            #            {
-            #                "name": credit_card["name"],
-            #                "asset_id": credit_card["asset_id"],
-            #                "bank_name": credit_card["bank_name"],
-            #                "asset_name": credit_card["asset_name"],
-            #                "background_type": credit_card["background_type"],
-            #                "background_value": credit_card["background_value"],
-            #                "text_color": credit_card["text_color"],
-            #                "limit_amount_cents": credit_card["limit_amount_cents"],
-            #                "closing_day": credit_card["closing_day"],
-            #                "due_day": credit_card["due_day"],
-            #                "last_four_digits": credit_card["last_four_digits"],
-            #            }
-            #        )
-
-            card_data = {
-                "id": item["card_id"],
-                "card_type": item["card_type"],
-                "config": config,
-
-                "title": template.get("title", item["card_type"]),
-                "subtitle": template.get("subtitle", ""),
-                "icon": template.get("icon", ""),
-                "size": template.get(
-                    "size",
-                    f'{item["width_units"]}x{item["height_units"]}',
-                ),
-            }
-
-            slot = gerar_card_financeiro(
+            slot = self.dashboard_card_registry.generate_slot(
                 card_data
             )
+
+            if item["card_type"] == "credit_card":
+                slot.mouseDoubleClickEvent = lambda event, current_slot=slot: (
+                    self._abrir_detalhes_cartao(current_slot)
+                )
 
             slot.delete_requested.connect(
                 self.dashboard_card_service.remover_ou_desativar_card
@@ -174,3 +177,81 @@ class FinanceHome(BaseScreen):
                 width_units=item["width_units"],
                 height_units=item["height_units"],
             )
+
+    def _registrar_compra_teste_cartao(self) -> None:
+        cartoes = self.credit_card_service.listar_cartoes_ativos()
+
+        if not cartoes:
+            QMessageBox.warning(
+                self,
+                "Nenhum cartão encontrado",
+                "Crie um cartão de crédito antes de registrar uma compra teste.",
+            )
+            return
+
+        cartao = cartoes[0]
+
+        lancamentos_criados = self.credit_card_expense_service.registrar_compra(
+            credit_card_id=cartao["id"],
+            description="Compra teste My Notebook",
+            purchase_date=date.today(),
+            amount_cents=12345,
+            closing_day=cartao["closing_day"],
+            due_day=cartao["due_day"],
+            category_id=1,
+            installment_total=3,
+            notes="Lançamento temporário criado pelo botão de teste.",
+        )
+
+        QMessageBox.information(
+            self,
+            "Compra registrada",
+            (
+                "Compra teste registrada com sucesso!\n\n"
+                f"Cartão: {cartao['name']}\n"
+                f"Parcelas criadas: {len(lancamentos_criados)}\n"
+                "Valor total: R$ 123,45"
+            ),
+        )
+
+        self._recarregar_dashboard()
+
+    def _recarregar_dashboard(self) -> None:
+        for slot in list(self.dashboard_area.card_slots):
+            self.dashboard_area.dashboard_grid.remove_card(
+                slot
+            )
+
+        self.dashboard_area.card_slots.clear()
+
+        self._carregar_layout_dashboard()
+
+    def _abrir_detalhes_cartao(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        credit_card = self.credit_card_service.buscar_por_dashboard_card_id(
+            slot.card_id
+        )
+
+        if credit_card is None:
+            QMessageBox.warning(
+                self,
+                "Cartão não configurado",
+                (
+                    "Este card ainda não possui um cartão de crédito configurado.\n\n"
+                    "Remova este card e adicione um novo cartão pelo catálogo."
+                ),
+            )
+            return
+
+        janela = CreditCardDetailWindow(
+            credit_card=credit_card,
+            parent=self,
+        )
+
+        janela.exec()

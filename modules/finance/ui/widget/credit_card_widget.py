@@ -57,8 +57,18 @@ class CreditCardWidget(QFrame):
             font-weight: 700;
         """)
 
+        current_invoice_amount_cents = config.get(
+            "current_invoice_amount_cents",
+            0,
+        )
+
+        current_invoice_amount = current_invoice_amount_cents / 100
+
         invoice = QLabel(
-            "Fatura atual: R$ 0,00"
+            f"Fatura atual: R$ {current_invoice_amount:,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
         )
 
         invoice.setStyleSheet("""

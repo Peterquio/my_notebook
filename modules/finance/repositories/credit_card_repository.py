@@ -113,3 +113,35 @@ class CreditCardRepository:
             return None
 
         return dict(row)
+
+    def listar_cartoes_ativos(self) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT cc.id,
+                   cc.dashboard_card_id,
+                   cc.name,
+                   cc.asset_id,
+                   cc.limit_amount_cents,
+                   cc.closing_day,
+                   cc.due_day,
+                   cc.last_four_digits,
+
+                   a.bank_name,
+                   a.asset_name,
+                   a.background_type,
+                   a.background_value,
+                   a.text_color
+            FROM finance_credit_cards cc
+                     INNER JOIN finance_credit_card_assets a
+                                ON a.id = cc.asset_id
+            WHERE cc.is_active = 1
+            ORDER BY cc.created_at DESC
+            """
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
