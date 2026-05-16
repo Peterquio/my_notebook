@@ -1,5 +1,6 @@
 import uuid
-
+from PySide6.QtWidgets import QDialog
+from modules.finance.ui.credit_card_setup_dialog import CreditCardSetupDialog
 
 class GenericFinanceDashboardCardHandler:
     def __init__(
@@ -99,6 +100,38 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
                 "due_day": credit_card["due_day"],
                 "last_four_digits": credit_card["last_four_digits"],
             }
+        )
+
+        return card_data
+
+    def create_new_card_data(
+            self,
+            template_data: dict,
+    ) -> dict | None:
+
+        card_data = super().create_new_card_data(
+            template_data
+        )
+
+        setup_dialog = CreditCardSetupDialog(
+            assets=self.credit_card_service.listar_assets(),
+        )
+
+        if setup_dialog.exec() != QDialog.Accepted:
+            return None
+
+        card_config = setup_dialog.get_data()
+
+        card_data["config"] = card_config
+
+        self.credit_card_service.criar_cartao(
+            dashboard_card_id=card_data["id"],
+            name=card_config["name"],
+            asset_id=card_config["asset_id"],
+            limit_amount_cents=card_config["limit_amount_cents"],
+            closing_day=card_config["closing_day"],
+            due_day=card_config["due_day"],
+            last_four_digits=card_config["last_four_digits"],
         )
 
         return card_data

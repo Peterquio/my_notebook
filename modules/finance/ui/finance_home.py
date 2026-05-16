@@ -123,27 +123,27 @@ class FinanceHome(BaseScreen):
 
             config = item.get("config", {})
 
-            if item["card_type"] == "credit_card":
-                credit_card = self.credit_card_service.buscar_por_dashboard_card_id(
-                    item["card_id"]
-                )
+            #if item["card_type"] == "credit_card":
+            #    credit_card = self.credit_card_service.buscar_por_dashboard_card_id(
+            #       item["card_id"]
+            #   )
 
-                if credit_card is not None:
-                    config.update(
-                        {
-                            "name": credit_card["name"],
-                            "asset_id": credit_card["asset_id"],
-                            "bank_name": credit_card["bank_name"],
-                            "asset_name": credit_card["asset_name"],
-                            "background_type": credit_card["background_type"],
-                            "background_value": credit_card["background_value"],
-                            "text_color": credit_card["text_color"],
-                            "limit_amount_cents": credit_card["limit_amount_cents"],
-                            "closing_day": credit_card["closing_day"],
-                            "due_day": credit_card["due_day"],
-                            "last_four_digits": credit_card["last_four_digits"],
-                        }
-                    )
+            #    if credit_card is not None:
+            #        config.update(
+            #            {
+            #                "name": credit_card["name"],
+            #                "asset_id": credit_card["asset_id"],
+            #                "bank_name": credit_card["bank_name"],
+            #                "asset_name": credit_card["asset_name"],
+            #                "background_type": credit_card["background_type"],
+            #                "background_value": credit_card["background_value"],
+            #                "text_color": credit_card["text_color"],
+            #                "limit_amount_cents": credit_card["limit_amount_cents"],
+            #                "closing_day": credit_card["closing_day"],
+            #                "due_day": credit_card["due_day"],
+            #                "last_four_digits": credit_card["last_four_digits"],
+            #            }
+            #        )
 
             card_data = {
                 "id": item["card_id"],

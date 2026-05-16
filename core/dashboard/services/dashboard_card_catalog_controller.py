@@ -1,9 +1,5 @@
-import uuid
-
-from PySide6.QtWidgets import QMessageBox, QDialog
-
+from PySide6.QtWidgets import QMessageBox
 from ui.widgets.card_catalog_dialog import CardCatalogDialog
-from modules.finance.ui.credit_card_setup_dialog import CreditCardSetupDialog
 
 class DashboardCardCatalogController:
     def __init__(
@@ -70,30 +66,6 @@ class DashboardCardCatalogController:
         card_data = self.card_data_factory(
             card_data
         )
-
-        if template_id == "credit_card":
-            setup_dialog = CreditCardSetupDialog(
-                assets=self.parent.credit_card_service.listar_assets(),
-                parent=self.parent,
-            )
-
-            if setup_dialog.exec() != QDialog.Accepted:
-                return
-
-            card_config = setup_dialog.get_data()
-
-        card_data["config"] = card_config
-
-        if template_id == "credit_card":
-            self.parent.credit_card_service.criar_cartao(
-                dashboard_card_id=card_data["id"],
-                name=card_config["name"],
-                asset_id=card_config["asset_id"],
-                limit_amount_cents=card_config["limit_amount_cents"],
-                closing_day=card_config["closing_day"],
-                due_day=card_config["due_day"],
-                last_four_digits=card_config["last_four_digits"],
-            )
 
         self.dashboard_card_service.criar_card(
             module_name=self.module_name,

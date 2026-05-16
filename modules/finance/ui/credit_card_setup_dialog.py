@@ -24,7 +24,7 @@ class CreditCardSetupDialog(QDialog):
 
         self.setWindowTitle("Configurar cartão")
         self.setModal(True)
-        self.setMinimumSize(520, 520)
+        self.setMinimumSize(760, 520)
         self.setObjectName("CreditCardSetupDialog")
 
         self.selected_asset_id = (
@@ -37,9 +37,12 @@ class CreditCardSetupDialog(QDialog):
         self._atualizar_preview()
 
     def _criar_layout(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(28, 26, 28, 24)
+        main_layout.setSpacing(20)
+
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(6)
 
         title = QLabel("Configurar cartão de crédito")
         title.setObjectName("CardCatalogDialogTitle")
@@ -47,16 +50,27 @@ class CreditCardSetupDialog(QDialog):
         subtitle = QLabel("Defina as informações iniciais do cartão.")
         subtitle.setObjectName("CardCatalogDialogSubtitle")
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        header_layout.addWidget(title)
+        header_layout.addWidget(subtitle)
+
+        main_layout.addLayout(header_layout)
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(24)
+
+        left_layout = QVBoxLayout()
+        left_layout.setSpacing(12)
+
+        preview_title = QLabel("Prévia do cartão")
+        preview_title.setObjectName("CardCatalogDialogSubtitle")
 
         self.preview_card = QFrame()
-        self.preview_card.setFixedHeight(140)
+        self.preview_card.setMinimumSize(300, 190)
         self.preview_card.setObjectName("CreditCardPreview")
 
         preview_layout = QVBoxLayout(self.preview_card)
-        preview_layout.setContentsMargins(18, 16, 18, 16)
-        preview_layout.setSpacing(8)
+        preview_layout.setContentsMargins(22, 20, 22, 20)
+        preview_layout.setSpacing(10)
 
         self.preview_name = QLabel("Meu Cartão")
         self.preview_name.setObjectName("CreditCardPreviewName")
@@ -77,10 +91,15 @@ class CreditCardSetupDialog(QDialog):
         preview_layout.addWidget(self.preview_dates)
         preview_layout.addWidget(self.preview_digits)
 
-        layout.addWidget(self.preview_card)
+        left_layout.addWidget(preview_title)
+        left_layout.addWidget(self.preview_card)
+        left_layout.addStretch()
+
+        form_layout = QVBoxLayout()
+        form_layout.setSpacing(12)
 
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Nome do cartão")
+        self.name_input.setPlaceholderText("Ex: Nubank, BB Visa, Cartão Inter")
         self.name_input.textChanged.connect(self._atualizar_preview)
 
         self.asset_combo = QComboBox()
@@ -96,7 +115,7 @@ class CreditCardSetupDialog(QDialog):
         )
 
         self.limit_input = QLineEdit()
-        self.limit_input.setPlaceholderText("Limite do cartão. Ex: 5000,00")
+        self.limit_input.setPlaceholderText("Ex: 5000,00")
 
         self.closing_day_input = QSpinBox()
         self.closing_day_input.setRange(1, 31)
@@ -113,48 +132,59 @@ class CreditCardSetupDialog(QDialog):
         self.last_digits_input.setMaxLength(4)
         self.last_digits_input.textChanged.connect(self._atualizar_preview)
 
-        layout.addWidget(QLabel("Nome"))
-        layout.addWidget(self.name_input)
+        form_layout.addWidget(QLabel("Nome do cartão"))
+        form_layout.addWidget(self.name_input)
 
-        layout.addWidget(QLabel("Fundo / asset"))
-        layout.addWidget(self.asset_combo)
+        form_layout.addWidget(QLabel("Fundo / asset"))
+        form_layout.addWidget(self.asset_combo)
 
-        layout.addWidget(QLabel("Limite"))
-        layout.addWidget(self.limit_input)
+        form_layout.addWidget(QLabel("Limite"))
+        form_layout.addWidget(self.limit_input)
 
         days_layout = QHBoxLayout()
+        days_layout.setSpacing(14)
 
         closing_layout = QVBoxLayout()
+        closing_layout.setSpacing(6)
         closing_layout.addWidget(QLabel("Fechamento"))
         closing_layout.addWidget(self.closing_day_input)
 
         due_layout = QVBoxLayout()
+        due_layout.setSpacing(6)
         due_layout.addWidget(QLabel("Vencimento"))
         due_layout.addWidget(self.due_day_input)
 
         days_layout.addLayout(closing_layout)
         days_layout.addLayout(due_layout)
 
-        layout.addLayout(days_layout)
+        form_layout.addLayout(days_layout)
 
-        layout.addWidget(QLabel("Número mascarado"))
-        layout.addWidget(self.last_digits_input)
+        form_layout.addWidget(QLabel("Número mascarado"))
+        form_layout.addWidget(self.last_digits_input)
+
+        form_layout.addStretch()
+
+        content_layout.addLayout(left_layout, stretch=1)
+        content_layout.addLayout(form_layout, stretch=1)
+
+        main_layout.addLayout(content_layout)
 
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 
         cancel_button = QPushButton("Cancelar")
+        cancel_button.setMinimumHeight(38)
         cancel_button.clicked.connect(self.reject)
 
         save_button = QPushButton("Salvar cartão")
         save_button.setObjectName("PrimarySoftButton")
+        save_button.setMinimumHeight(38)
         save_button.clicked.connect(self.accept)
 
         buttons_layout.addWidget(cancel_button)
         buttons_layout.addWidget(save_button)
 
-        layout.addStretch()
-        layout.addLayout(buttons_layout)
+        main_layout.addLayout(buttons_layout)
 
     def _asset_alterado(self) -> None:
         self.selected_asset_id = self.asset_combo.currentData()
