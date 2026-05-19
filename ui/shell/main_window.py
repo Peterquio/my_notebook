@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget
-
+from ui.shell.focus_mode_controller import FocusModeController
 from core.config.app_config import (
     APP_NAME,
     WINDOW_WIDTH,
@@ -50,6 +50,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.content_stack, stretch=1)
 
         self.navigation_manager = NavigationManager(self.content_stack)
+        self.focus_mode_controller = FocusModeController(
+            sidebar=self.sidebar,
+            content_stack=self.content_stack,
+        )
 
     def _registrar_telas(self) -> None:
         self.navigation_manager.registrar_tela(
@@ -84,6 +88,17 @@ class MainWindow(QMainWindow):
 
     def _navegar_para(self, nome_tela: str) -> None:
         self.navigation_manager.navegar_para(nome_tela)
+
+    def entrar_modo_foco(
+            self,
+            widget,
+    ) -> None:
+        self.focus_mode_controller.enter_focus_mode(
+            widget
+        )
+
+    def sair_modo_foco(self) -> None:
+        self.focus_mode_controller.exit_focus_mode()
 
     def _aplicar_estilo(self) -> None:
         self.setStyleSheet(f"""

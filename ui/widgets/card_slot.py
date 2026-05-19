@@ -4,6 +4,7 @@ from PySide6.QtGui import QRegion, QPainterPath
 
 class CardSlot(QFrame):
     delete_requested = Signal(str, dict)
+    clicked = Signal()
     def __init__(
             self,
             card,
@@ -281,6 +282,12 @@ class CardSlot(QFrame):
 
         self._destroy_drag_ghost()
         self.dragging = False
+        if (
+                not self.edit_mode
+                and not self.dragging
+                and event.button() == Qt.LeftButton
+        ):
+            self.clicked.emit()
         super().mouseReleaseEvent(event)
 
     def set_pressed(self, pressed: bool) -> None:

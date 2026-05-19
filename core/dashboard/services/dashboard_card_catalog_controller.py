@@ -11,6 +11,7 @@ class DashboardCardCatalogController:
             card_data_factory,
             dashboard_area,
             dashboard_card_service,
+            on_slot_created=None,
     ) -> None:
 
         self.parent = parent
@@ -21,6 +22,7 @@ class DashboardCardCatalogController:
         self.dashboard_area = dashboard_area
         self.dashboard_card_service = dashboard_card_service
         self.card_catalog_dialog = None
+        self.on_slot_created = on_slot_created
 
     def abrir_seletor_cards(self) -> None:
         cards_removidos = self.dashboard_card_service.listar_cards_removidos(
@@ -76,9 +78,7 @@ class DashboardCardCatalogController:
             card_data
         )
 
-        slot.delete_requested.connect(
-            self.dashboard_card_service.remover_ou_desativar_card
-        )
+        self._finalizar_slot(slot)
 
         self.dashboard_area.add_card(
             slot,
@@ -102,9 +102,7 @@ class DashboardCardCatalogController:
             card_data
         )
 
-        slot.delete_requested.connect(
-            self.dashboard_card_service.remover_ou_desativar_card
-        )
+        self._finalizar_slot(slot)
 
         self.dashboard_area.add_card(
             slot,
@@ -157,3 +155,15 @@ class DashboardCardCatalogController:
             )
 
         print(f"[DASHBOARD] Card excluído definitivamente: {card_data['id']}")
+
+    def _finalizar_slot(
+            self,
+            slot,
+    ) -> None:
+
+        slot.delete_requested.connect(
+            self.dashboard_card_service.remover_ou_desativar_card
+        )
+
+        if self.on_slot_created is not None:
+            self.on_slot_created(slot)

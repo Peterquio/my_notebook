@@ -1,10 +1,5 @@
-from datetime import date
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QVBoxLayout,
-    QPushButton,
-    QMessageBox,
-)
+from PySide6.QtWidgets import QVBoxLayout
 
 from core.dashboard.services.dashboard_card_catalog_controller import (
     DashboardCardCatalogController,
@@ -14,10 +9,6 @@ from modules.finance.dashboard.finance_dashboard_card_registry import (
     FinanceDashboardCardRegistry,
 )
 
-from modules.finance.services.credit_card_expense_service import (
-    CreditCardExpenseService,
-)
-
 from modules.finance.services.credit_card_service import (
     CreditCardService,
 )
@@ -25,6 +16,7 @@ from modules.finance.services.credit_card_service import (
 from modules.finance.ui.credit_card_detail_window import (
     CreditCardDetailWindow,
 )
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -53,10 +45,6 @@ class FinanceHome(BaseScreen):
         self.dashboard_card_registry = FinanceDashboardCardRegistry(
             card_generator=gerar_card_financeiro,
             credit_card_service=self.credit_card_service,
-        )
-
-        self.credit_card_expense_service = CreditCardExpenseService(
-            self.username
         )
 
         DatabaseManager(
@@ -93,6 +81,7 @@ class FinanceHome(BaseScreen):
             card_data_factory=self.dashboard_card_registry.create_new_card_data,
             dashboard_area=self.dashboard_area,
             dashboard_card_service=self.dashboard_card_service,
+            on_slot_created=self._on_dashboard_slot_created,
         )
 
         self.dashboard_area.add_card_requested.connect(
@@ -101,18 +90,6 @@ class FinanceHome(BaseScreen):
 
         self.header_actions.addWidget(
             self.dashboard_area.toolbar
-        )
-
-        self.btn_teste_compra_cartao = QPushButton(
-            "Teste compra cartão"
-        )
-
-        self.btn_teste_compra_cartao.clicked.connect(
-            self._registrar_compra_teste_cartao
-        )
-
-        self.header_actions.addWidget(
-            self.btn_teste_compra_cartao
         )
 
         content_layout = QVBoxLayout(self.content_area)
@@ -162,8 +139,8 @@ class FinanceHome(BaseScreen):
             )
 
             if item["card_type"] == "credit_card":
-                slot.mouseDoubleClickEvent = lambda event, current_slot=slot: (
-                    self._abrir_detalhes_cartao(current_slot)
+                self._conectar_abertura_card_cartao(
+                    slot
                 )
 
             slot.delete_requested.connect(
@@ -177,44 +154,6 @@ class FinanceHome(BaseScreen):
                 width_units=item["width_units"],
                 height_units=item["height_units"],
             )
-
-    def _registrar_compra_teste_cartao(self) -> None:
-        cartoes = self.credit_card_service.listar_cartoes_ativos()
-
-        if not cartoes:
-            QMessageBox.warning(
-                self,
-                "Nenhum cartão encontrado",
-                "Crie um cartão de crédito antes de registrar uma compra teste.",
-            )
-            return
-
-        cartao = cartoes[0]
-
-        lancamentos_criados = self.credit_card_expense_service.registrar_compra(
-            credit_card_id=cartao["id"],
-            description="Compra teste My Notebook",
-            purchase_date=date.today(),
-            amount_cents=12345,
-            closing_day=cartao["closing_day"],
-            due_day=cartao["due_day"],
-            category_id=1,
-            installment_total=3,
-            notes="Lançamento temporário criado pelo botão de teste.",
-        )
-
-        QMessageBox.information(
-            self,
-            "Compra registrada",
-            (
-                "Compra teste registrada com sucesso!\n\n"
-                f"Cartão: {cartao['name']}\n"
-                f"Parcelas criadas: {len(lancamentos_criados)}\n"
-                "Valor total: R$ 123,45"
-            ),
-        )
-
-        self._recarregar_dashboard()
 
     def _recarregar_dashboard(self) -> None:
         for slot in list(self.dashboard_area.card_slots):
@@ -239,19 +178,63 @@ class FinanceHome(BaseScreen):
         )
 
         if credit_card is None:
-            QMessageBox.warning(
-                self,
-                "Cartão não configurado",
-                (
-                    "Este card ainda não possui um cartão de crédito configurado.\n\n"
-                    "Remova este card e adicione um novo cartão pelo catálogo."
-                ),
-            )
             return
 
-        janela = CreditCardDetailWindow(
+        self.credit_card_detail_page = CreditCardDetailWindow(
             credit_card=credit_card,
-            parent=self,
+            username=self.username,
+            parent=self.window(),
         )
 
-        janela.exec()
+        self.credit_card_detail_page.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.credit_card_detail_page.data_changed.connect(
+            self._recarregar_dashboard
+        )
+
+        self.window().entrar_modo_foco(
+            self.credit_card_detail_page
+        )
+
+    def _conectar_abertura_card_cartao(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot: self._abrir_detalhes_cartao(
+                current_slot
+            )
+        )
+
+    def _on_dashboard_slot_created(
+            self,
+            slot,
+    ) -> None:
+
+        card_type = getattr(
+            slot,
+            "card_type",
+            None,
+        )
+
+        if card_type != "credit_card":
+            return
+
+        self._conectar_abertura_card_cartao(
+            slot
+        )
+
+    def _voltar_para_dashboard_financeiro(self) -> None:
+        self.window().sair_modo_foco()
+
+        self.credit_card_detail_page = None
+
+        self._recarregar_dashboard()
