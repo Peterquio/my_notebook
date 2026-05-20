@@ -143,3 +143,45 @@ class CreditCardExpenseRepository:
             dict(row)
             for row in cursor.fetchall()
         ]
+
+    def listar_por_cartao(
+            self,
+            credit_card_id: int,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+            ORDER BY purchase_date
+            """,
+            (credit_card_id,),
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
+
+    def atualizar_invoice_id(
+            self,
+            expense_id: int,
+            invoice_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET invoice_id = ?
+            WHERE id = ?
+            """,
+            (
+                invoice_id,
+                expense_id,
+            ),
+        )
+
+        self.conexao.commit()

@@ -28,6 +28,17 @@ from modules.finance.ui.dialogs.credit_card_import_preview_dialog import (
     CreditCardImportPreviewDialog,
 )
 
+from modules.finance.repositories.credit_card_expense_repository import (
+    CreditCardExpenseRepository,
+)
+
+from modules.finance.repositories.credit_card_invoice_repository import (
+    CreditCardInvoiceRepository,
+)
+
+from modules.finance.services.credit_card_invoice_service import (
+    CreditCardInvoiceService,
+)
 
 class CreditCardDetailWindow(QWidget):
     back_requested = Signal()
@@ -328,7 +339,14 @@ class CreditCardDetailWindow(QWidget):
         )
 
         layout.addWidget(voltar)
-        
+
+        reprocessar = QPushButton("↻ Reprocessar")
+        reprocessar.clicked.connect(
+            self._reprocessar_faturas
+        )
+
+        layout.addWidget(reprocessar)
+
         titulo = QLabel(
             f"Cartão de Crédito {self.credit_card['name']}"
         )
@@ -796,3 +814,34 @@ class CreditCardDetailWindow(QWidget):
 
         self.table.deleteLater()
         self.table = nova_tabela
+
+    def _reprocessar_faturas(self) -> None:
+        expense_repository = CreditCardExpenseRepository(
+            self.username
+        )
+
+        invoice_repository = CreditCardInvoiceRepository(
+            self.username
+        )
+
+        invoice_service = CreditCardInvoiceService()
+
+        total = invoice_service.reprocessar_faturas_cartao(
+            credit_card=self.credit_card,
+            expense_repository=expense_repository,
+            invoice_repository=invoice_repository,
+        )
+
+        self.invoice_data = self.detail_service.carregar_fatura_atual(
+            self.credit_card
+        )
+
+        self._recarregar_resumo()
+
+        self.data_changed.emit()
+
+        QMessageBox.information(
+            self,
+            "Faturas reprocessadas",
+            f"{total} lançamentos foram reprocessados.",
+        )
