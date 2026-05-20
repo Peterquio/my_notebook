@@ -210,19 +210,26 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
 
     category_id INTEGER DEFAULT 1,
 
-    description TEXT NOT NULL,
+    original_description TEXT,
+    effective_description TEXT,
+    
+    original_purchase_date TEXT,
+    effective_purchase_date TEXT,
+    
+    original_amount_cents INTEGER,
+    effective_amount_cents INTEGER,
+    
+    installment_group_id TEXT,
+    
+    source_type TEXT,
+    source_reference TEXT,
 
-    purchase_date TEXT NOT NULL,
     billing_date TEXT NOT NULL,
 
     installment_number INTEGER NOT NULL DEFAULT 1,
     installment_total INTEGER NOT NULL DEFAULT 1,
 
-    amount_cents INTEGER NOT NULL,
-
     status TEXT NOT NULL DEFAULT 'pending',
-
-    original_expense_group_id TEXT,
 
     notes TEXT,
 

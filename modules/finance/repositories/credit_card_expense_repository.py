@@ -11,16 +11,20 @@ class CreditCardExpenseRepository:
             credit_card_id: int,
             invoice_id: int,
             category_id: int,
-            description: str,
-            purchase_date: str,
+            effective_description: str,
+            effective_purchase_date: str,
             billing_date: str,
             installment_number: int,
             installment_total: int,
-            amount_cents: int,
-            original_expense_group_id: str,
+            effective_amount_cents: int,
+            installment_group_id: str | None = None,
             notes: str | None = None,
+            original_description: str | None = None,
+            original_purchase_date: str | None = None,
+            original_amount_cents: int | None = None,
+            source_type: str | None = None,
+            source_reference: str | None = None,
     ) -> int:
-
         cursor = self.conexao.cursor()
 
         cursor.execute(
@@ -29,28 +33,54 @@ class CreditCardExpenseRepository:
                 credit_card_id,
                 invoice_id,
                 category_id,
-                description,
-                purchase_date,
+
+                original_description,
+                effective_description,
+
+                original_purchase_date,
+                effective_purchase_date,
+
+                original_amount_cents,
+                effective_amount_cents,
+
                 billing_date,
+
                 installment_number,
                 installment_total,
-                amount_cents,
-                original_expense_group_id,
+
+                installment_group_id,
+
+                source_type,
+                source_reference,
+
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 credit_card_id,
                 invoice_id,
                 category_id,
-                description,
-                purchase_date,
+
+                original_description,
+                effective_description,
+
+                original_purchase_date,
+                effective_purchase_date,
+
+                original_amount_cents,
+                effective_amount_cents,
+
                 billing_date,
+
                 installment_number,
                 installment_total,
-                amount_cents,
-                original_expense_group_id,
+
+                installment_group_id,
+
+                source_type,
+                source_reference,
+
                 notes,
             ),
         )
@@ -69,7 +99,7 @@ class CreditCardExpenseRepository:
 
         cursor.execute(
             """
-            SELECT COALESCE(SUM(e.amount_cents), 0) AS total_cents
+            SELECT COALESCE(SUM(e.effective_amount_cents), 0) AS total_cents
             FROM finance_credit_card_expenses e
                      INNER JOIN finance_credit_card_invoices i
                                 ON i.id = e.invoice_id
@@ -99,37 +129,46 @@ class CreditCardExpenseRepository:
 
         cursor.execute(
             """
-            SELECT e.id,
-                   e.credit_card_id,
-                   e.invoice_id,
-                   e.category_id,
-                   e.description,
-                   e.purchase_date,
-                   e.billing_date,
-                   e.installment_number,
-                   e.installment_total,
-                   e.amount_cents,
-                   e.status,
-                   e.original_expense_group_id,
+            SELECT
+                e.id,
+                e.credit_card_id,
+                e.invoice_id,
+                e.category_id,
 
-                   c.name  AS category_name,
-                   c.color AS category_color,
+                e.effective_description,
+                e.effective_purchase_date,
+                e.effective_amount_cents,
 
-                   i.invoice_year,
-                   i.invoice_month
+                e.original_description,
+                e.original_purchase_date,
+                e.original_amount_cents,
+
+                e.billing_date,
+                e.installment_number,
+                e.installment_total,
+                e.installment_group_id,
+                e.source_type,
+                e.source_reference,
+                e.status,
+
+                c.name AS category_name,
+                c.color AS category_color,
+
+                i.invoice_year,
+                i.invoice_month
             FROM finance_credit_card_expenses e
-                     INNER JOIN finance_credit_card_invoices i
-                                ON i.id = e.invoice_id
-                     LEFT JOIN finance_categories c
-                               ON c.id = e.category_id
+            INNER JOIN finance_credit_card_invoices i
+                ON i.id = e.invoice_id
+            LEFT JOIN finance_categories c
+                ON c.id = e.category_id
             WHERE e.credit_card_id = ?
               AND i.invoice_year = ?
               AND i.invoice_month = ?
               AND e.status != 'cancelled'
             ORDER BY
                 c.name,
-                e.purchase_date,
-                e.description,
+                e.effective_purchase_date,
+                e.effective_description,
                 e.installment_number
             """,
             (

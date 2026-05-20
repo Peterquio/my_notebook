@@ -83,14 +83,19 @@ class CreditCardImportService:
                 credit_card_id=credit_card["id"],
                 invoice_id=invoice_id,
                 category_id=category_id,
-                description=expense.description,
-                purchase_date=expense.purchase_date.isoformat(),
+                effective_description=expense.description,
+                effective_purchase_date=expense.purchase_date.isoformat(),
                 billing_date=closing_date.isoformat(),
                 installment_number=expense.installment_number,
                 installment_total=expense.installment_total,
-                amount_cents=expense.amount_cents,
-                original_expense_group_id=expense.raw_title,
+                effective_amount_cents=expense.amount_cents,
+                installment_group_id=expense.raw_title,
                 notes=f"Importado via CSV - {expense.source}",
+                original_description=expense.raw_title,
+                original_purchase_date=expense.purchase_date.isoformat(),
+                original_amount_cents=expense.amount_cents,
+                source_type=expense.source,
+                source_reference=expense.raw_title,
             )
 
             total_salvo += 1

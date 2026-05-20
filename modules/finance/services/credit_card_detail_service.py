@@ -7,7 +7,6 @@ from modules.finance.services.credit_card_invoice_service import (
     CreditCardInvoiceService,
 )
 
-
 class CreditCardDetailService:
     def __init__(self, username: str) -> None:
         self.expense_repository = CreditCardExpenseRepository(username)
@@ -36,7 +35,7 @@ class CreditCardDetailService:
         )
 
         total_fatura_cents = sum(
-            lancamento["amount_cents"]
+            lancamento["effective_amount_cents"]
             for lancamento in lancamentos
         )
 
@@ -75,7 +74,7 @@ class CreditCardDetailService:
                     }
                 )
 
-            valor_parcela = lancamento["amount_cents"]
+            valor_parcela = lancamento["effective_amount_cents"]
             parcela_atual = lancamento["installment_number"]
             total_parcelas = lancamento["installment_total"]
 
@@ -92,9 +91,9 @@ class CreditCardDetailService:
                 {
                     "type": "expense",
                     "date": self._formatar_data_curta(
-                        lancamento["purchase_date"]
+                        lancamento["effective_purchase_date"]
                     ),
-                    "description": lancamento["description"],
+                    "description": lancamento["effective_description"],
                     "category": categoria,
                     "category_color": cor,
                     "installment": texto_parcela,

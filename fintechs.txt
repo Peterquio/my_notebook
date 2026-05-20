@@ -1,0 +1,33 @@
+Banco/Fintech	   Cartão	    Bandeira
+Nubank	           Nubank Gold	      Mastercard
+Nubank	           Nubank Platinum    Mastercard
+Nubank	           Ultravioleta	      Mastercard Black
+Banco Inter	   Inter Gold	      Mastercard
+Banco Inter	   Inter Platinum     Mastercard
+Banco Inter	   Inter Black	      Mastercard Black
+C6 Bank	           C6	              Mastercard
+C6 Bank	           C6 Platinum	      Mastercard
+C6 Bank	           C6 Carbon	      Mastercard Black
+Banco do Brasil	   Ourocard Fácil     Visa
+Banco do Brasil	   Ourocard Platinum  Visa
+Banco do Brasil	   Altus	      Visa Infinite
+Itaú Unibanco	   Click	      Visa / Mastercard
+Itaú Unibanco	   Pão de Açúcar      Mastercard
+Itaú Unibanco	   Personnalité Black Mastercard Black
+Bradesco	   Neo	              Visa
+Bradesco	   Elo Nanquim	Elo
+Bradesco	   Aeternum	Visa Infinite
+Santander Brasil   SX	Visa
+Santander Brasil   Unique	Mastercard Black
+Santander Brasil   Unlimited	Visa Infinite
+Caixa Econômica    Federal	SIM	Visa
+Caixa Econômica    Federal	Elo Grafite	Elo
+BTG Pactual	   BTG Black	Mastercard Black
+XP Inc.	           XP Visa Infinite	Visa Infinite
+PicPay	           PicPay Card	Mastercard
+PagBank	           PagBank Visa	Visa
+Mercado Pago	   Mercado Pago Visa	Visa
+Will Bank	   Will	Mastercard
+Neon	           Neon Visa
+Sicoob	           Merit	   Mastercard Black
+Sicredi	           Visa Infinite	Visa Infinite
