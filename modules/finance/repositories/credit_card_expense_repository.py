@@ -89,6 +89,28 @@ class CreditCardExpenseRepository:
 
         return cursor.lastrowid
 
+    def atualizar_categoria(
+            self,
+            expense_id: int,
+            category_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                category_id = ?
+            WHERE id = ?
+            """,
+            (
+                category_id,
+                expense_id,
+            ),
+        )
+
+        self.conexao.commit()
+
     def somar_fatura(
             self,
             credit_card_id: int,
@@ -130,7 +152,7 @@ class CreditCardExpenseRepository:
         cursor.execute(
             """
             SELECT
-                e.id,
+                e.id AS expense_id,
                 e.credit_card_id,
                 e.invoice_id,
                 e.category_id,

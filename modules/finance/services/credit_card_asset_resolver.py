@@ -29,33 +29,48 @@ class CreditCardResolvedAssets:
 
 
 CARD_ASSET_PRESETS: dict[str, CreditCardAssetPreset] = {
-    "nubank_roxinho": CreditCardAssetPreset(
-        key="nubank_roxinho",
-        label="Nubank Roxinho",
-        issuer="nubank.png",
-        brand="mastercard.png",
-        background_color="#820AD1",
-        background=None,
-        overlay="glass_reflection.png",
-    ),
-    "nubank_ultravioleta": CreditCardAssetPreset(
-        key="nubank_ultravioleta",
-        label="Nubank Ultravioleta",
-        issuer="nubank.png",
-        brand="mastercard.png",
-        background_color="#820AD1",
-        background=None,
-        overlay="glass_reflection.png",
-    ),
-    "generic_black": CreditCardAssetPreset(
-        key="generic_black",
-        label="Genérico Black",
-        issuer="skyline.png",
-        brand="wild_card.png",
-        background_color="#000000",
-        background=None,
-        overlay="glass_reflection.png",
-    ),
+    "nubank_gold": CreditCardAssetPreset("nubank_gold", "Nubank Gold", "nubank.png", "mastercard.png", "#7C3AED", "#FFFFFF", None, "glass_reflection.png"),
+    "nubank_platinum": CreditCardAssetPreset("nubank_platinum", "Nubank Platinum", "nubank.png", "mastercard.png", "#6D28D9", "#FFFFFF", None, "glass_reflection.png"),
+    "nubank_ultravioleta": CreditCardAssetPreset("nubank_ultravioleta", "Nubank Ultravioleta", "nubank.png", "mastercard.png", "#111111", "#FFFFFF", None, "glass_reflection.png"),
+
+    "inter_gold": CreditCardAssetPreset("inter_gold", "Inter Gold", "skyline.png", "mastercard.png", "#F97316", "#FFFFFF", None, "glass_reflection.png"),
+    "inter_platinum": CreditCardAssetPreset("inter_platinum", "Inter Platinum", "skyline.png", "mastercard.png", "#CBD5E1", "#111827", None, "glass_reflection.png"),
+    "inter_black": CreditCardAssetPreset("inter_black", "Inter Black", "skyline.png", "mastercard.png", "#050505", "#FFFFFF", None, "glass_reflection.png"),
+
+    "c6_standard": CreditCardAssetPreset("c6_standard", "C6", "c6.png", "mastercard.png", "#111827", "#FFFFFF", None, "glass_reflection.png"),
+    "c6_platinum": CreditCardAssetPreset("c6_platinum", "C6 Platinum", "c6.png", "mastercard.png", "#94A3B8", "#111827", None, "glass_reflection.png"),
+    "c6_carbon": CreditCardAssetPreset("c6_carbon", "C6 Carbon", "c6.png", "mastercard.png", "#020617", "#FFFFFF", None, "glass_reflection.png"),
+
+    "bb_ourocard_facil": CreditCardAssetPreset("bb_ourocard_facil", "Ourocard Fácil", "bb.png", "visa.png", "#FACC15", "#1E3A8A", None, "glass_reflection.png"),
+    "bb_ourocard_platinum": CreditCardAssetPreset("bb_ourocard_platinum", "Ourocard Platinum", "bb_silver.png", "visa.png", "#CBD5E1", "#1E3A8A", None, "glass_reflection.png"),
+    "bb_altus": CreditCardAssetPreset("bb_altus", "Altus", "bb_gold.png", "visa.png", "#111827", "#FACC15", None, "glass_reflection.png"),
+
+    "itau_click": CreditCardAssetPreset("itau_click", "Click", "itau.png", "visa.png", "#F97316", "#FFFFFF", None, "glass_reflection.png"),
+    "itau_pao_de_acucar": CreditCardAssetPreset("itau_pao_de_acucar", "Pão de Açúcar", "itau_az.png", "mastercard.png", "#14532D", "#FFFFFF", None, "glass_reflection.png"),
+    "itau_personnalite_black": CreditCardAssetPreset("itau_personnalite_black", "Personnalité Black", "itau_bco.png", "mastercard.png", "#050505", "#FFFFFF", None, "glass_reflection.png"),
+
+    "bradesco_neo": CreditCardAssetPreset("bradesco_neo", "Neo", "bradesco.png", "visa.png", "#B91C1C", "#FFFFFF", None, "glass_reflection.png"),
+    "bradesco_elo_nanquim": CreditCardAssetPreset("bradesco_elo_nanquim", "Elo Nanquim", "bradesco_bco.png", "elo.png", "#030712", "#FFFFFF", None, "glass_reflection.png"),
+    "bradesco_aeternum": CreditCardAssetPreset("bradesco_aeternum", "Aeternum", "bradesco_bco.png", "visa.png", "#111827", "#E5E7EB", None, "glass_reflection.png"),
+
+    "santander_sx": CreditCardAssetPreset("santander_sx", "SX", "santander.png", "visa.png", "#DC2626", "#FFFFFF", None, "glass_reflection.png"),
+    "santander_unique": CreditCardAssetPreset("santander_unique", "Unique", "santander_bco.png", "mastercard.png", "#050505", "#FFFFFF", None, "glass_reflection.png"),
+    "santander_unlimited": CreditCardAssetPreset("santander_unlimited", "Unlimited", "santander_silver.png", "visa.png", "#111827", "#E5E7EB", None, "glass_reflection.png"),
+
+    "caixa_sim": CreditCardAssetPreset("caixa_sim", "SIM", "caixa.png", "visa.png", "#2563EB", "#FFFFFF", None, "glass_reflection.png"),
+    "caixa_elo_grafite": CreditCardAssetPreset("caixa_elo_grafite", "Elo Grafite", "caixa.png", "elo.png", "#374151", "#FFFFFF", None, "glass_reflection.png"),
+
+    "btg_black": CreditCardAssetPreset("btg_black", "BTG Black", "btg.png", "mastercard.png", "#020617", "#FFFFFF", None, "glass_reflection.png"),
+    "xp_visa_infinite": CreditCardAssetPreset("xp_visa_infinite", "XP Visa Infinite", "xp.png", "visa.png", "#111827", "#FFFFFF", None, "glass_reflection.png"),
+    "picpay_card": CreditCardAssetPreset("picpay_card", "PicPay Card", "picpay.png", "mastercard.png", "#16A34A", "#FFFFFF", None, "glass_reflection.png"),
+    "pagbank_visa": CreditCardAssetPreset("pagbank_visa", "PagBank Visa", "pagbank.png", "visa.png", "#FACC15", "#111827", None, "glass_reflection.png"),
+    "mercado_pago_visa": CreditCardAssetPreset("mercado_pago_visa", "Mercado Pago Visa", "mercado_pago.png", "visa.png", "#38BDF8", "#0F172A", None, "glass_reflection.png"),
+    "will_bank": CreditCardAssetPreset("will_bank", "Will", "will_bank.png", "mastercard.png", "#FACC15", "#111827", None, "glass_reflection.png"),
+    "neon_visa": CreditCardAssetPreset("neon_visa", "Neon", "neon.png", "visa.png", "#00BFFF", "#FFFFFF", None, "glass_reflection.png"),
+    "sicoob_merit": CreditCardAssetPreset("sicoob_merit", "Merit", "sicoob.png", "mastercard.png", "#064E3B", "#FFFFFF", None, "glass_reflection.png"),
+    "sicredi_visa_infinite": CreditCardAssetPreset("sicredi_visa_infinite", "Visa Infinite", "Sicredi-logo.png", "visa.png", "#065F46", "#FFFFFF", None, "glass_reflection.png"),
+
+    "generic_black": CreditCardAssetPreset("generic_black", "Cartão Genérico", "skyline.png", "wild_card.png", "#000000", "#FFFFFF", None, "glass_reflection.png"),
 }
 
 

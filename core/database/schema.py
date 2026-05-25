@@ -123,24 +123,48 @@ INSERT OR IGNORE INTO finance_credit_card_assets (
     preset_key
 )
 VALUES
-(
-    'generic_black_1',
-    'Skyline',
-    'Skyline Black',
-    'generic_black'
-),
-(
-    'nu_1',
-    'Nubank',
-    'Nubank Roxinho',
-    'nubank_roxinho'
-),
-(
-    'nu_2',
-    'Nubank',
-    'Ultravioleta',
-    'nubank_ultravioleta'
-);
+('nubank_gold', 'Nubank', 'Nubank Gold', 'nubank_gold'),
+('nubank_platinum', 'Nubank', 'Nubank Platinum', 'nubank_platinum'),
+('nubank_ultravioleta', 'Nubank', 'Ultravioleta', 'nubank_ultravioleta'),
+
+('inter_gold', 'Banco Inter', 'Inter Gold', 'inter_gold'),
+('inter_platinum', 'Banco Inter', 'Inter Platinum', 'inter_platinum'),
+('inter_black', 'Banco Inter', 'Inter Black', 'inter_black'),
+
+('c6_standard', 'C6 Bank', 'C6', 'c6_standard'),
+('c6_platinum', 'C6 Bank', 'C6 Platinum', 'c6_platinum'),
+('c6_carbon', 'C6 Bank', 'C6 Carbon', 'c6_carbon'),
+
+('bb_ourocard_facil', 'Banco do Brasil', 'Ourocard Fácil', 'bb_ourocard_facil'),
+('bb_ourocard_platinum', 'Banco do Brasil', 'Ourocard Platinum', 'bb_ourocard_platinum'),
+('bb_altus', 'Banco do Brasil', 'Altus', 'bb_altus'),
+
+('itau_click', 'Itaú Unibanco', 'Click', 'itau_click'),
+('itau_pao_de_acucar', 'Itaú Unibanco', 'Pão de Açúcar', 'itau_pao_de_acucar'),
+('itau_personnalite_black', 'Itaú Unibanco', 'Personnalité Black', 'itau_personnalite_black'),
+
+('bradesco_neo', 'Bradesco', 'Neo', 'bradesco_neo'),
+('bradesco_elo_nanquim', 'Bradesco', 'Elo Nanquim', 'bradesco_elo_nanquim'),
+('bradesco_aeternum', 'Bradesco', 'Aeternum', 'bradesco_aeternum'),
+
+('santander_sx', 'Santander Brasil', 'SX', 'santander_sx'),
+('santander_unique', 'Santander Brasil', 'Unique', 'santander_unique'),
+('santander_unlimited', 'Santander Brasil', 'Unlimited', 'santander_unlimited'),
+
+('caixa_sim', 'Caixa Econômica Federal', 'SIM', 'caixa_sim'),
+('caixa_elo_grafite', 'Caixa Econômica Federal', 'Elo Grafite', 'caixa_elo_grafite'),
+
+('btg_black', 'BTG Pactual', 'BTG Black', 'btg_black'),
+('xp_visa_infinite', 'XP Inc.', 'XP Visa Infinite', 'xp_visa_infinite'),
+('picpay_card', 'PicPay', 'PicPay Card', 'picpay_card'),
+('pagbank_visa', 'PagBank', 'PagBank Visa', 'pagbank_visa'),
+('mercado_pago_visa', 'Mercado Pago', 'Mercado Pago Visa', 'mercado_pago_visa'),
+('will_bank', 'Will Bank', 'Will', 'will_bank'),
+('neon_visa', 'Neon', 'Neon Visa', 'neon_visa'),
+('sicoob_merit', 'Sicoob', 'Merit', 'sicoob_merit'),
+('sicredi_visa_infinite', 'Sicredi', 'Visa Infinite', 'sicredi_visa_infinite'),
+
+('generic_black', 'Skyline', 'Cartão Genérico', 'generic_black');
 
 CREATE TABLE IF NOT EXISTS finance_credit_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

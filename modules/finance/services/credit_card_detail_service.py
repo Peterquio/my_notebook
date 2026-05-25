@@ -7,8 +7,14 @@ from modules.finance.services.credit_card_invoice_service import (
     CreditCardInvoiceService,
 )
 
+from modules.finance.repositories.credit_card_expense_repository import (
+    CreditCardExpenseRepository,
+)
+
 class CreditCardDetailService:
     def __init__(self, username: str) -> None:
+        self.username = username
+
         self.expense_repository = CreditCardExpenseRepository(username)
         self.invoice_service = CreditCardInvoiceService()
 
@@ -90,6 +96,8 @@ class CreditCardDetailService:
             rows.append(
                 {
                     "type": "expense",
+                    "expense_id": lancamento["expense_id"],
+                    "category_id": lancamento["category_id"],
                     "date": self._formatar_data_curta(
                         lancamento["effective_purchase_date"]
                     ),
@@ -126,3 +134,17 @@ class CreditCardDetailService:
         ano, mes, dia = data_iso.split("-")
 
         return f"{dia}/{mes}"
+
+    def atualizar_categoria_lancamento(
+            self,
+            expense_id: int,
+            category_id: int,
+    ) -> None:
+        expense_repository = CreditCardExpenseRepository(
+            self.username
+        )
+
+        expense_repository.atualizar_categoria(
+            expense_id=expense_id,
+            category_id=category_id,
+        )
