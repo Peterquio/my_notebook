@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMessageBox
-from ui.widgets.card_catalog_dialog import CardCatalogDialog
+from ui.dialogs.card_catalog_dialog import CardCatalogDialog
 
 class DashboardCardCatalogController:
     def __init__(

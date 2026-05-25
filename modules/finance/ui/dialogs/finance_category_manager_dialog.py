@@ -1,7 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QColorDialog,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -19,6 +18,9 @@ from modules.finance.services.finance_category_service import (
     FinanceCategoryService,
 )
 
+from ui.dialogs.color_picker_dialog import (
+    escolher_cor,
+)
 
 class FinanceCategoryManagerDialog(QDialog):
     def __init__(
@@ -36,6 +38,8 @@ class FinanceCategoryManagerDialog(QDialog):
         self.setMinimumSize(680, 500)
 
         self.selected_color = "#7C3AED"
+
+        self.category_rows = []
 
         self._aplicar_estilo()
         self._montar_interface()
@@ -125,6 +129,26 @@ class FinanceCategoryManagerDialog(QDialog):
 
         layout.addWidget(self.scroll_area, 1)
 
+        salvar_tudo = QPushButton("Salvar alterações")
+        salvar_tudo.setCursor(Qt.PointingHandCursor)
+        salvar_tudo.clicked.connect(self._salvar_todas_categorias)
+        salvar_tudo.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #6d28d9;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-weight: bold;
+                padding: 10px 16px;
+            }
+
+            QPushButton:hover {
+                background-color: #5b21b6;
+            }
+            """
+        )
+
         fechar = QPushButton("Fechar")
         fechar.setCursor(Qt.PointingHandCursor)
         fechar.clicked.connect(self.close)
@@ -132,6 +156,7 @@ class FinanceCategoryManagerDialog(QDialog):
 
         footer = QHBoxLayout()
         footer.addStretch()
+        footer.addWidget(salvar_tudo)
         footer.addWidget(fechar)
 
         layout.addLayout(footer)
@@ -198,6 +223,7 @@ class FinanceCategoryManagerDialog(QDialog):
 
     def _carregar_categorias(self) -> None:
         self._limpar_lista()
+        self.category_rows = []
 
         categorias = self.service.listar_categorias_ativas()
 
@@ -238,14 +264,34 @@ class FinanceCategoryManagerDialog(QDialog):
 
         cor = categoria["color"]
 
-        bolinha = QLabel()
+        bolinha = QPushButton()
+        bolinha.setCursor(Qt.PointingHandCursor)
         bolinha.setFixedSize(28, 28)
         bolinha.setStyleSheet(
             f"""
-            background-color: {cor};
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            QPushButton {{
+                background-color: {cor};
+                border-radius: 14px;
+                border: 1px solid #e2e8f0;
+            }}
+
+            QPushButton:hover {{
+                border: 2px solid #0f172a;
+            }}
             """
+        )
+
+        cor_editada = {
+            "value": cor,
+        }
+
+        bolinha.clicked.connect(
+            lambda checked=False,
+                   botao=bolinha,
+                   cor_estado=cor_editada: self._editar_cor_categoria(
+                botao=botao,
+                cor_estado=cor_estado,
+            )
         )
 
         nome = QLineEdit(categoria["name"])
@@ -255,17 +301,6 @@ class FinanceCategoryManagerDialog(QDialog):
         ordem.setMaximum(99)
         ordem.setValue(categoria["display_number"])
         ordem.setFixedWidth(80)
-
-        salvar = QPushButton("Salvar")
-        salvar.setCursor(Qt.PointingHandCursor)
-        salvar.clicked.connect(
-            lambda: self._salvar_categoria(
-                categoria_id=categoria["id"],
-                nome_input=nome,
-                cor=cor,
-                ordem_input=ordem,
-            )
-        )
 
         remover = QPushButton("Remover")
         remover.setCursor(Qt.PointingHandCursor)
@@ -279,7 +314,6 @@ class FinanceCategoryManagerDialog(QDialog):
         if categoria.get("is_protected"):
             nome.setEnabled(False)
             ordem.setEnabled(False)
-            salvar.setEnabled(False)
             remover.setEnabled(False)
             remover.setText("Protegida")
 
@@ -287,22 +321,30 @@ class FinanceCategoryManagerDialog(QDialog):
         layout.addWidget(nome, 1)
         layout.addWidget(QLabel("Ordem"))
         layout.addWidget(ordem)
-        layout.addWidget(salvar)
         layout.addWidget(remover)
+
+        self.category_rows.append(
+            {
+                "id": categoria["id"],
+                "nome_input": nome,
+                "ordem_input": ordem,
+                "cor_estado": cor_editada,
+                "is_protected": categoria.get("is_protected"),
+            }
+        )
 
         return card
 
     def _escolher_cor(self) -> None:
-        cor = QColorDialog.getColor(
-            QColor(self.selected_color),
-            self,
-            "Escolher cor da categoria",
+        cor = escolher_cor(
+            parent=self,
+            cor_inicial=self.selected_color,
         )
 
-        if not cor.isValid():
+        if not cor:
             return
 
-        self.selected_color = cor.name().upper()
+        self.selected_color = cor
 
         self.cor_preview.setStyleSheet(
             f"""
@@ -329,27 +371,61 @@ class FinanceCategoryManagerDialog(QDialog):
         self.nome_input.clear()
         self._carregar_categorias()
 
-    def _salvar_categoria(
+    def _editar_cor_categoria(
             self,
-            category_id: int,
-            nome_input: QLineEdit,
-            cor: str,
-            ordem_input: QSpinBox,
+            botao: QPushButton,
+            cor_estado: dict,
     ) -> None:
+        cor = escolher_cor(
+            parent=self,
+            cor_inicial=cor_estado["value"],
+        )
+
+        if not cor:
+            return
+
+        cor_estado["value"] = cor
+
+        botao.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {cor};
+                border-radius: 14px;
+                border: 1px solid #e2e8f0;
+            }}
+
+            QPushButton:hover {{
+                border: 2px solid #0f172a;
+            }}
+            """
+        )
+
+    def _salvar_todas_categorias(self) -> None:
         try:
-            self.service.atualizar_categoria(
-                category_id=category_id,
-                name=nome_input.text(),
-                color=cor,
-                display_number=ordem_input.value(),
-            )
+            for row in self.category_rows:
+                if row["is_protected"]:
+                    continue
+
+                self.service.atualizar_categoria(
+                    category_id=row["id"],
+                    name=row["nome_input"].text(),
+                    color=row["cor_estado"]["value"],
+                    display_number=row["ordem_input"].value(),
+                )
+
         except Exception as erro:
             QMessageBox.warning(
                 self,
-                "Erro ao salvar categoria",
+                "Erro ao salvar categorias",
                 str(erro),
             )
             return
+
+        QMessageBox.information(
+            self,
+            "Categorias salvas",
+            "As alterações foram salvas com sucesso.",
+        )
 
         self._carregar_categorias()
 
