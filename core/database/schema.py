@@ -110,15 +110,9 @@ VALUES (
 
 CREATE TABLE IF NOT EXISTS finance_credit_card_assets (
     id TEXT PRIMARY KEY,
-
     bank_name TEXT NOT NULL,
     asset_name TEXT NOT NULL,
-
-    background_type TEXT NOT NULL DEFAULT 'color',
-    background_value TEXT NOT NULL,
-
-    text_color TEXT NOT NULL DEFAULT '#FFFFFF',
-
+    preset_key TEXT NOT NULL,
     is_active INTEGER DEFAULT 1
 );
 
@@ -126,34 +120,26 @@ INSERT OR IGNORE INTO finance_credit_card_assets (
     id,
     bank_name,
     asset_name,
-    background_type,
-    background_value,
-    text_color
+    preset_key
 )
 VALUES
 (
+    'generic_black_1',
+    'Skyline',
+    'Skyline Black',
+    'generic_black'
+),
+(
     'nu_1',
     'Nubank',
-    'Nubank Roxo',
-    'color',
-    '#7C3AED',
-    '#FFFFFF'
+    'Nubank Roxinho',
+    'nubank_roxinho'
 ),
 (
-    'bb_1',
-    'Banco do Brasil',
-    'BB Amarelo',
-    'color',
-    '#FACC15',
-    '#1D4ED8'
-),
-(
-    'generico_1',
-    'Genérico',
-    'Cartão Azul',
-    'color',
-    '#2563EB',
-    '#FFFFFF'
+    'nu_2',
+    'Nubank',
+    'Ultravioleta',
+    'nubank_ultravioleta'
 );
 
 CREATE TABLE IF NOT EXISTS finance_credit_cards (

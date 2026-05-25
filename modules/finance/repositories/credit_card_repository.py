@@ -19,9 +19,7 @@ class CreditCardRepository:
                 id,
                 bank_name,
                 asset_name,
-                background_type,
-                background_value,
-                text_color
+                preset_key
             FROM finance_credit_card_assets
             WHERE is_active = 1
             ORDER BY bank_name, asset_name
@@ -95,9 +93,7 @@ class CreditCardRepository:
 
                 a.bank_name,
                 a.asset_name,
-                a.background_type,
-                a.background_value,
-                a.text_color
+                a.preset_key
             FROM finance_credit_cards cc
             INNER JOIN finance_credit_card_assets a
                 ON a.id = cc.asset_id
@@ -130,9 +126,7 @@ class CreditCardRepository:
 
                    a.bank_name,
                    a.asset_name,
-                   a.background_type,
-                   a.background_value,
-                   a.text_color
+                   a.preset_key
             FROM finance_credit_cards cc
                      INNER JOIN finance_credit_card_assets a
                                 ON a.id = cc.asset_id
