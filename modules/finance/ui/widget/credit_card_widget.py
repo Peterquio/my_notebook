@@ -35,7 +35,7 @@ class CreditCardWidget(QFrame):
         )
 
         self.name = config.get("name", "Meu Cartão")
-        self.last_four_digits = config.get("last_four_digits", "0000")
+        self.last_four_digits = config.get("last_four_digits") or "0000"
         self.closing_day = config.get("closing_day", 5)
         self.due_day = config.get("due_day", 15)
 
@@ -70,13 +70,12 @@ class CreditCardWidget(QFrame):
             rect=rect,
         )
 
-        self._draw_pixmap_fit(
+        self._draw_pixmap_fit_by_height(
             painter=painter,
             path=self.resolved_assets.issuer_path,
             x=18,
             y=16,
-            width=74,
-            height=30,
+            height=24,
         )
 
         self._draw_pixmap_fit(
@@ -93,10 +92,10 @@ class CreditCardWidget(QFrame):
         self._draw_pixmap_fit(
             painter=painter,
             path=self.resolved_assets.brand_path,
-            x=self.width() - 76,
-            y=self.height() - 44,
-            width=54,
-            height=28,
+            x=self.width() - 81,
+            y=self.height() - 66,
+            width=70,
+            height=40,
         )
 
     def _draw_texts(self, painter: QPainter) -> None:
@@ -127,30 +126,30 @@ class CreditCardWidget(QFrame):
 
         painter.setFont(name_font)
         painter.drawText(
-            QRectF(18, self.height() - 86, self.width() - 36, 20),
+            QRectF(18, self.height() - 74, self.width() - 36, 20),
             Qt.AlignLeft | Qt.AlignVCenter,
             self.name,
         )
 
         painter.setFont(invoice_font)
         painter.drawText(
-            QRectF(18, self.height() - 64, self.width() - 36, 26),
+            QRectF(18, self.height() - 56, self.width() - 36, 26),
             Qt.AlignLeft | Qt.AlignVCenter,
             invoice_text,
         )
 
         painter.setFont(small_font)
         painter.drawText(
-            QRectF(18, self.height() - 40, self.width() - 100, 18),
+            QRectF(18, self.height() - 30, self.width() - 88, 18),
             Qt.AlignLeft | Qt.AlignVCenter,
             f"Fecha {self.closing_day:02d} • Vence {self.due_day:02d}",
         )
 
         painter.setFont(digits_font)
         painter.drawText(
-            QRectF(18, self.height() - 22, self.width() - 100, 18),
-            Qt.AlignLeft | Qt.AlignVCenter,
-            f"•••• {self.last_four_digits}",
+            QRectF(self.width() - 84, self.height() - 30, 52, 18),
+            Qt.AlignRight | Qt.AlignVCenter,
+            self.last_four_digits,
         )
 
     def _draw_pixmap_fit(
@@ -208,6 +207,33 @@ class CreditCardWidget(QFrame):
 
         x = int((self.width() - scaled.width()) / 2)
         y = int((self.height() - scaled.height()) / 2)
+
+        painter.drawPixmap(
+            x,
+            y,
+            scaled,
+        )
+
+    def _draw_pixmap_fit_by_height(
+            self,
+            painter: QPainter,
+            path,
+            x: int,
+            y: int,
+            height: int,
+    ) -> None:
+        if path is None:
+            return
+
+        pixmap = QPixmap(str(path))
+
+        if pixmap.isNull():
+            return
+
+        scaled = pixmap.scaledToHeight(
+            height,
+            Qt.SmoothTransformation,
+        )
 
         painter.drawPixmap(
             x,

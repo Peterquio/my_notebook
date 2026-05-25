@@ -72,13 +72,12 @@ class CreditCardPreviewWidget(QFrame):
         self._draw_pixmap_cover(painter, self.background_path, rect)
         self._draw_pixmap_cover(painter, self.overlay_path, rect)
 
-        self._draw_pixmap_fit(
+        self._draw_pixmap_fit_by_height(
             painter=painter,
             path=self.issuer_path,
             x=24,
             y=22,
-            width=92,
-            height=38,
+            height=28,
         )
 
         self._draw_pixmap_fit(
@@ -95,10 +94,10 @@ class CreditCardPreviewWidget(QFrame):
         self._draw_pixmap_fit(
             painter=painter,
             path=self.brand_path,
-            x=self.width() - 94,
-            y=self.height() - 58,
-            width=68,
-            height=38,
+            x=self.width() - 108,
+            y=self.height() - 68,
+            width=84,
+            height=48,
         )
 
     def _draw_texts(self, painter: QPainter) -> None:
@@ -164,6 +163,38 @@ class CreditCardPreviewWidget(QFrame):
         draw_y = y + (height - scaled.height()) / 2
 
         painter.drawPixmap(int(draw_x), int(draw_y), scaled)
+
+    def _draw_pixmap_fit_by_height(
+            self,
+            painter: QPainter,
+            path,
+            x: int,
+            y: int,
+            height: int,
+    ) -> None:
+        if path is None:
+            return
+
+        pixmap = QPixmap(str(path))
+
+        if pixmap.isNull():
+            return
+
+        ratio = pixmap.width() / pixmap.height()
+        width = int(height * ratio)
+
+        scaled = pixmap.scaled(
+            width,
+            height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        painter.drawPixmap(
+            x,
+            y,
+            scaled,
+        )
 
     def _draw_pixmap_cover(
             self,
