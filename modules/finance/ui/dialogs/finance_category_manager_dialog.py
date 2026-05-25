@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
     QWidget,
+    QAbstractSpinBox,
 )
 
 from modules.finance.services.finance_category_service import (
@@ -40,6 +41,7 @@ class FinanceCategoryManagerDialog(QDialog):
         self.selected_color = "#7C3AED"
 
         self.category_rows = []
+        self.mostrar_inativas = False
 
         self._aplicar_estilo()
         self._montar_interface()
@@ -122,7 +124,7 @@ class FinanceCategoryManagerDialog(QDialog):
         self.lista_container = QWidget()
         self.lista_layout = QVBoxLayout(self.lista_container)
         self.lista_layout.setContentsMargins(0, 0, 0, 0)
-        self.lista_layout.setSpacing(10)
+        self.lista_layout.setSpacing(4)
         self.lista_layout.addStretch()
 
         self.scroll_area.setWidget(self.lista_container)
@@ -225,14 +227,85 @@ class FinanceCategoryManagerDialog(QDialog):
         self._limpar_lista()
         self.category_rows = []
 
-        categorias = self.service.listar_categorias_ativas()
+        categorias = self.service.listar_todas_categorias()
 
-        for categoria in categorias:
+        categorias_ativas = [
+            categoria
+            for categoria in categorias
+            if categoria["is_active"]
+        ]
+
+        categorias_inativas = [
+            categoria
+            for categoria in categorias
+            if not categoria["is_active"]
+        ]
+
+        for categoria in categorias_ativas:
             card = self._criar_card_categoria(categoria)
+
             self.lista_layout.insertWidget(
                 self.lista_layout.count() - 1,
                 card,
             )
+
+        if categorias_inativas:
+            self._adicionar_bloco_inativas(
+                categorias_inativas
+            )
+
+    def _adicionar_bloco_inativas(
+            self,
+            categorias_inativas: list[dict],
+    ) -> None:
+        botao = QPushButton(
+            "▸ Categorias inativas"
+            if not self.mostrar_inativas
+            else "▾ Categorias inativas"
+        )
+        botao.setCursor(Qt.PointingHandCursor)
+        botao.clicked.connect(
+            self._alternar_bloco_inativas
+        )
+        botao.setStyleSheet(
+            """
+            QPushButton {
+                background-color: transparent;
+                color: #64748b;
+                border: none;
+                border-radius: 8px;
+                text-align: left;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 4px;
+            }
+
+            QPushButton:hover {
+                background-color: #f1f5f9;
+                color: #334155;
+            }
+            """
+        )
+
+        self.lista_layout.insertWidget(
+            self.lista_layout.count() - 1,
+            botao,
+        )
+
+        if not self.mostrar_inativas:
+            return
+
+        for categoria in categorias_inativas:
+            card = self._criar_card_categoria(categoria)
+
+            self.lista_layout.insertWidget(
+                self.lista_layout.count() - 1,
+                card,
+            )
+
+    def _alternar_bloco_inativas(self) -> None:
+        self.mostrar_inativas = not self.mostrar_inativas
+        self._carregar_categorias()
 
     def _limpar_lista(self) -> None:
         while self.lista_layout.count() > 1:
@@ -259,19 +332,19 @@ class FinanceCategoryManagerDialog(QDialog):
         )
 
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setContentsMargins(14, 8, 14, 8)
         layout.setSpacing(10)
 
         cor = categoria["color"]
 
         bolinha = QPushButton()
         bolinha.setCursor(Qt.PointingHandCursor)
-        bolinha.setFixedSize(28, 28)
+        bolinha.setFixedSize(22, 22)
         bolinha.setStyleSheet(
             f"""
             QPushButton {{
                 background-color: {cor};
-                border-radius: 14px;
+                border-radius: 11px;
                 border: 1px solid #e2e8f0;
             }}
 
@@ -295,21 +368,55 @@ class FinanceCategoryManagerDialog(QDialog):
         )
 
         nome = QLineEdit(categoria["name"])
+        nome.setFixedHeight(34)
 
         ordem = QSpinBox()
+        ordem.setFixedHeight(34)
+        ordem.setFocusPolicy(Qt.StrongFocus)
+        ordem.wheelEvent = lambda event: event.ignore()
         ordem.setMinimum(1)
         ordem.setMaximum(99)
-        ordem.setValue(categoria["display_number"])
+        ordem.setValue(
+            categoria["display_number"] or 0
+        )
         ordem.setFixedWidth(80)
 
         remover = QPushButton("Remover")
+        remover.setFixedHeight(34)
         remover.setCursor(Qt.PointingHandCursor)
-        remover.clicked.connect(
-            lambda: self._remover_categoria(
-                categoria["id"],
-                categoria["name"],
+
+        if categoria["is_active"]:
+            remover.setText("Remover")
+            remover.clicked.connect(
+                lambda: self._remover_categoria(
+                    categoria["id"],
+                    categoria["name"],
+                )
             )
-        )
+        else:
+            remover.setText("Reativar")
+            nome.setEnabled(False)
+            ordem.setEnabled(False)
+            bolinha.setEnabled(False)
+            remover.clicked.connect(
+                lambda: self._reativar_categoria(
+                    categoria["id"],
+                )
+            )
+
+            bolinha.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #334155;
+                    border-radius: 14px;
+                    border: 1px solid #e2e8f0;
+                }
+
+                QPushButton:hover {
+                    border: 2px solid #0f172a;
+                }
+                """
+            )
 
         if categoria.get("is_protected"):
             nome.setEnabled(False)
@@ -402,6 +509,24 @@ class FinanceCategoryManagerDialog(QDialog):
 
     def _salvar_todas_categorias(self) -> None:
         try:
+            numeros_usados = {}
+
+            for row in self.category_rows:
+                if row["is_protected"]:
+                    continue
+
+                numero = row["ordem_input"].value()
+
+                if numero in numeros_usados:
+                    QMessageBox.warning(
+                        self,
+                        "Ordem duplicada",
+                        f"O número {numero} foi usado em mais de uma categoria.",
+                    )
+                    return
+
+                numeros_usados[numero] = row["id"]
+
             for row in self.category_rows:
                 if row["is_protected"]:
                     continue
@@ -453,4 +578,11 @@ class FinanceCategoryManagerDialog(QDialog):
             )
             return
 
+        self._carregar_categorias()
+
+    def _reativar_categoria(
+            self,
+            category_id: int,
+    ) -> None:
+        self.service.reativar_categoria(category_id)
         self._carregar_categorias()

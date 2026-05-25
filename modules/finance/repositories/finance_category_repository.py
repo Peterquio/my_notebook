@@ -103,11 +103,61 @@ class FinanceCategoryRepository:
             UPDATE finance_categories
             SET
                 is_active = 0,
+                display_number = 999,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
               AND is_protected = 0
             """,
             (category_id,),
+        )
+
+        self.conexao.commit()
+
+    def listar_todas(self) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                display_number,
+                name,
+                color,
+                is_active,
+                is_protected
+            FROM finance_categories
+            ORDER BY
+                is_active DESC,
+                CASE
+                    WHEN display_number IS NULL THEN 999
+                    ELSE display_number
+                END ASC,
+                name ASC
+            """
+        )
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def reativar(
+            self,
+            category_id: int,
+            display_number: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_categories
+            SET
+                is_active = 1,
+                display_number = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                display_number,
+                category_id,
+            ),
         )
 
         self.conexao.commit()

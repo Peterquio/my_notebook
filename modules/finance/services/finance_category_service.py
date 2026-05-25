@@ -82,3 +82,17 @@ class FinanceCategoryService:
             raise ValueError("A cor deve estar no formato hexadecimal. Exemplo: #7C3AED")
 
         return color.upper()
+
+    def listar_todas_categorias(self) -> list[dict]:
+        return self.repository.listar_todas()
+
+    def reativar_categoria(
+            self,
+            category_id: int,
+    ) -> None:
+        display_number = self.repository.obter_proximo_display_number()
+
+        self.repository.reativar(
+            category_id=category_id,
+            display_number=display_number,
+        )
