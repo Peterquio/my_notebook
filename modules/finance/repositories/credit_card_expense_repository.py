@@ -246,7 +246,7 @@ class CreditCardExpenseRepository:
             SELECT *
             FROM finance_credit_card_expenses
             WHERE credit_card_id = ?
-            ORDER BY purchase_date
+            ORDER BY effective_purchase_date
             """,
             (credit_card_id,),
         )
@@ -276,3 +276,76 @@ class CreditCardExpenseRepository:
         )
 
         self.conexao.commit()
+
+    def existe_lancamento_importado(
+            self,
+            credit_card_id: int,
+            original_description: str,
+            original_purchase_date: str,
+            original_amount_cents: int,
+            installment_number: int,
+            installment_total: int,
+    ) -> bool:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT 1
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND original_description = ?
+              AND original_purchase_date = ?
+              AND original_amount_cents = ?
+              AND installment_number = ?
+              AND installment_total = ?
+              AND status != 'cancelled'
+            LIMIT 1
+            """,
+            (
+                credit_card_id,
+                original_description,
+                original_purchase_date,
+                original_amount_cents,
+                installment_number,
+                installment_total,
+            ),
+        )
+
+        return cursor.fetchone() is not None
+
+    def contar_lancamentos_por_assinatura(
+            self,
+            credit_card_id: int,
+            original_description: str,
+            original_purchase_date: str,
+            original_amount_cents: int,
+            installment_number: int,
+            installment_total: int,
+    ) -> int:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND original_description = ?
+              AND original_purchase_date = ?
+              AND original_amount_cents = ?
+              AND installment_number = ?
+              AND installment_total = ?
+              AND status != 'cancelled'
+            """,
+            (
+                credit_card_id,
+                original_description,
+                original_purchase_date,
+                original_amount_cents,
+                installment_number,
+                installment_total,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        return int(row["total"] or 0)

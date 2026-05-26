@@ -39,7 +39,8 @@ class CreditCardDetailService:
         )
 
         rows = self._montar_rows_tabela(
-            lancamentos
+            lancamentos=lancamentos,
+            agrupar_por_categoria=sort_mode == "categoria",
         )
 
         total_fatura_cents = sum(
@@ -58,6 +59,7 @@ class CreditCardDetailService:
     def _montar_rows_tabela(
             self,
             lancamentos: list[dict],
+            agrupar_por_categoria: bool = True,
     ) -> list[dict]:
 
         rows = []
@@ -67,7 +69,7 @@ class CreditCardDetailService:
             categoria = lancamento["category_name"] or "Sem categoria"
             cor = lancamento["category_color"] or "#6d28d9"
 
-            if categoria != categoria_atual:
+            if agrupar_por_categoria and categoria != categoria_atual:
                 categoria_atual = categoria
 
                 rows.append(

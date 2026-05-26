@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 from modules.finance.repositories.credit_card_invoice_repository import (
     CreditCardInvoiceRepository,
 )
@@ -35,6 +36,18 @@ class CreditCardImportService:
             csv_path
         )
 
+    def _gerar_assinatura_importacao(
+            self,
+            expense: ImportedCreditCardExpense,
+    ) -> tuple:
+        return (
+            expense.raw_title,
+            expense.purchase_date.isoformat(),
+            expense.amount_cents,
+            expense.installment_number,
+            expense.installment_total,
+        )
+
     def confirmar_importacao(
             self,
             credit_card: dict,
@@ -44,7 +57,28 @@ class CreditCardImportService:
 
         total_salvo = 0
 
+        total_por_assinatura = Counter(
+            self._gerar_assinatura_importacao(expense)
+            for expense in expenses
+        )
+
+        ja_importados_agora = defaultdict(int)
+
         for expense in expenses:
+            assinatura = self._gerar_assinatura_importacao(expense)
+
+            total_no_banco = self.expense_repository.contar_lancamentos_por_assinatura(
+                credit_card_id=credit_card["id"],
+                original_description=assinatura[0],
+                original_purchase_date=assinatura[1],
+                original_amount_cents=assinatura[2],
+                installment_number=assinatura[3],
+                installment_total=assinatura[4],
+            )
+
+            if total_no_banco + ja_importados_agora[assinatura] >= total_por_assinatura[assinatura]:
+                continue
+
             invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
                 purchase_date=expense.purchase_date,
                 closing_day=credit_card["closing_day"],
@@ -98,6 +132,7 @@ class CreditCardImportService:
                 source_reference=expense.raw_title,
             )
 
+            ja_importados_agora[assinatura] += 1
             total_salvo += 1
 
         return total_salvo

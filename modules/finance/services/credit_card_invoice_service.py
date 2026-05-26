@@ -59,7 +59,7 @@ class CreditCardInvoiceService:
 
         for lancamento in lancamentos:
             purchase_date = date.fromisoformat(
-                lancamento["purchase_date"]
+                lancamento["effective_purchase_date"]
             )
 
             invoice_year, invoice_month = self.calcular_mes_fatura(

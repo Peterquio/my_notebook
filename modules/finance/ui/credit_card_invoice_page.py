@@ -44,6 +44,10 @@ from modules.finance.services.finance_category_service import (
     FinanceCategoryService,
 )
 
+from modules.finance.services.credit_card_portable_data_service import (
+    CreditCardPortableDataService,
+)
+
 class CreditCardInvoicePage(QWidget):
     back_requested = Signal()
     data_changed = Signal()
@@ -61,6 +65,10 @@ class CreditCardInvoicePage(QWidget):
 
         self.import_service = CreditCardImportService(self.username)
         self.detail_service = CreditCardDetailService(username=self.username)
+
+        self.portable_data_service = CreditCardPortableDataService(
+            self.username
+        )
 
         self.category_service = FinanceCategoryService(
             self.username
@@ -192,25 +200,6 @@ class CreditCardInvoicePage(QWidget):
 
         return layout
 
-    def _recarregar_resumo(self) -> None:
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
-
-        nova_area = self._criar_area_principal()
-
-        layout_principal = self.layout()
-
-        antigo_content = layout_principal.itemAt(1).widget()
-
-        layout_principal.replaceWidget(
-            antigo_content,
-            nova_area,
-        )
-
-        antigo_content.deleteLater()
-
     def _criar_card_resumo(
             self,
             icon: str,
@@ -330,8 +319,17 @@ class CreditCardInvoicePage(QWidget):
             self._importar_csv
         )
 
+        importar_backup = QPushButton("Importar backup")
+        importar_backup.setFixedWidth(135)
+        importar_backup.clicked.connect(
+            self._importar_dados_cartao
+        )
+
         exportar = QPushButton("⬇  Exportar")
         exportar.setFixedWidth(105)
+        exportar.clicked.connect(
+            self._exportar_dados_cartao
+        )
 
         novo = QPushButton("+  Novo lançamento")
         novo.setFixedWidth(150)
@@ -357,6 +355,7 @@ class CreditCardInvoicePage(QWidget):
         layout.addWidget(tipos)
         layout.addStretch()
         layout.addWidget(importar)
+        layout.addWidget(importar_backup)
         layout.addWidget(exportar)
         layout.addWidget(novo)
         layout.addWidget(ordenar)
@@ -609,6 +608,134 @@ class CreditCardInvoicePage(QWidget):
     def _dados_mockados(self) -> list[dict]:
         return self.invoice_data["rows"]
 
+    def _exportar_dados_cartao(self) -> None:
+        resposta = QMessageBox.question(
+            self,
+            "Exportar dados do cartão",
+            "Deseja exportar em formato SQLite portátil?\n\n"
+            "Sim = SQLite\n"
+            "Não = Excel\n"
+            "Cancelar = CSV",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+        )
+
+        if resposta == QMessageBox.Yes:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self,
+                "Exportar cartão em SQLite",
+                "cartao_exportado.db",
+                "Banco SQLite (*.db)",
+            )
+
+            if not caminho:
+                return
+
+            self.portable_data_service.exportar_db(
+                credit_card=self.credit_card,
+                destino=caminho,
+            )
+
+        elif resposta == QMessageBox.No:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self,
+                "Exportar cartão em Excel",
+                "cartao_exportado.xlsx",
+                "Planilha Excel (*.xlsx)",
+            )
+
+            if not caminho:
+                return
+
+            self.portable_data_service.exportar_excel(
+                credit_card=self.credit_card,
+                destino=caminho,
+            )
+
+        else:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self,
+                "Exportar cartão em CSV",
+                "cartao_exportado.csv",
+                "CSV (*.csv)",
+            )
+
+            if not caminho:
+                return
+
+            self.portable_data_service.exportar_csv(
+                credit_card=self.credit_card,
+                destino=caminho,
+            )
+
+        QMessageBox.information(
+            self,
+            "Exportação concluída",
+            "Os dados deste cartão foram exportados com sucesso.",
+        )
+
+    def _importar_dados_cartao(self) -> None:
+        caminho, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importar dados do cartão",
+            "",
+            "Arquivos suportados (*.db *.xlsx *.csv)",
+        )
+
+        if not caminho:
+            return
+
+        try:
+            if caminho.lower().endswith(".db"):
+                total = self.portable_data_service.importar_db(
+                    credit_card=self.credit_card,
+                    origem=caminho,
+                    category_id=1,
+                )
+
+            elif caminho.lower().endswith(".xlsx"):
+                total = self.portable_data_service.importar_excel(
+                    credit_card=self.credit_card,
+                    origem=caminho,
+                    category_id=1,
+                )
+
+            elif caminho.lower().endswith(".csv"):
+                total = self.portable_data_service.importar_csv(
+                    credit_card=self.credit_card,
+                    origem=caminho,
+                    category_id=1,
+                )
+
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Formato inválido",
+                    "Selecione um arquivo .db, .xlsx ou .csv.",
+                )
+                return
+
+        except Exception as erro:
+            QMessageBox.critical(
+                self,
+                "Erro ao importar dados",
+                str(erro),
+            )
+            return
+
+        self.invoice_data = self.detail_service.carregar_fatura_atual(
+            self.credit_card,
+            sort_mode=self.sort_mode,
+        )
+
+        self._recarregar_tabela()
+        self.data_changed.emit()
+
+        QMessageBox.information(
+            self,
+            "Importação concluída",
+            f"{total} lançamentos foram importados para este cartão.",
+        )
+
     def _importar_csv(self) -> None:
         csv_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -665,7 +792,7 @@ class CreditCardInvoicePage(QWidget):
             sort_mode=self.sort_mode,
         )
 
-        self._recarregar_resumo()
+        self._recarregar_tabela()
         self.data_changed.emit()
 
     def _recarregar_tabela(self) -> None:
@@ -703,7 +830,7 @@ class CreditCardInvoicePage(QWidget):
             sort_mode=self.sort_mode,
         )
 
-        self._recarregar_resumo()
+        self._recarregar_tabela()
 
         self.data_changed.emit()
 
