@@ -146,8 +146,42 @@ class CreditCardExpenseRepository:
             credit_card_id: int,
             invoice_year: int,
             invoice_month: int,
+            sort_mode: str = "categoria",
     ) -> list[dict]:
         cursor = self.conexao.cursor()
+
+        order_by_options = {
+            "data": """
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+            "categoria": """
+                c.display_number ASC,
+                e.installment_number ASC,
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+            "alfabetica": """
+                e.effective_description ASC,
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+            "valor": """
+                e.effective_amount_cents DESC,
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+            "parcelas": """
+                e.installment_number ASC,
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+        }
+
+        order_by = order_by_options.get(
+            sort_mode,
+            order_by_options["categoria"],
+        )
 
         cursor.execute(
             """
@@ -188,11 +222,7 @@ class CreditCardExpenseRepository:
               AND i.invoice_month = ?
               AND e.status != 'cancelled'
             ORDER BY
-                c.name,
-                e.effective_purchase_date,
-                e.effective_description,
-                e.installment_number
-            """,
+            """ + order_by,
             (
                 credit_card_id,
                 invoice_year,

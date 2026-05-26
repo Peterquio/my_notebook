@@ -21,6 +21,7 @@ class CreditCardDetailService:
     def carregar_fatura_atual(
             self,
             credit_card: dict,
+            sort_mode: str = "categoria",
     ) -> dict:
 
         hoje = date.today()
@@ -34,6 +35,7 @@ class CreditCardDetailService:
             credit_card_id=credit_card["id"],
             invoice_year=invoice_year,
             invoice_month=invoice_month,
+            sort_mode=sort_mode,
         )
 
         rows = self._montar_rows_tabela(

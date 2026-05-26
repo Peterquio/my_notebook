@@ -67,9 +67,11 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.categories = self.category_service.listar_categorias_ativas()
+        self.sort_mode = "categoria"
 
         self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
         self._montar_interface()
@@ -192,7 +194,8 @@ class CreditCardInvoicePage(QWidget):
 
     def _recarregar_resumo(self) -> None:
         self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
         nova_area = self._criar_area_principal()
@@ -296,6 +299,21 @@ class CreditCardInvoicePage(QWidget):
         categorias.setFixedWidth(160)
 
         tipos = QComboBox()
+        ordenar = QComboBox()
+        ordenar.addItems(
+            [
+                "Ordenar por categoria",
+                "Ordenar por data",
+                "Ordenar por ordem alfabética",
+                "Ordenar por valor",
+                "Ordenar por parcelas pagas",
+            ]
+        )
+        ordenar.setFixedWidth(220)
+
+        ordenar.currentIndexChanged.connect(
+            self._alterar_ordenacao
+        )
         tipos.addItems(
             [
                 "Todos",
@@ -341,8 +359,33 @@ class CreditCardInvoicePage(QWidget):
         layout.addWidget(importar)
         layout.addWidget(exportar)
         layout.addWidget(novo)
+        layout.addWidget(ordenar)
 
         return layout
+
+    def _alterar_ordenacao(
+            self,
+            index: int,
+    ) -> None:
+        sort_modes = {
+            0: "categoria",
+            1: "data",
+            2: "alfabetica",
+            3: "valor",
+            4: "parcelas",
+        }
+
+        self.sort_mode = sort_modes.get(
+            index,
+            "categoria",
+        )
+
+        self.invoice_data = self.detail_service.carregar_fatura_atual(
+            self.credit_card,
+            sort_mode=self.sort_mode,
+        )
+
+        self._recarregar_tabela()
 
     def _criar_tabela(self) -> QTableWidget:
         table = QTableWidget()
@@ -543,7 +586,9 @@ class CreditCardInvoicePage(QWidget):
             """
         )
 
-        itens = QLabel("Itens por página:  50")
+        itens = QLabel(
+            f"{self.invoice_data['total_lancamentos']} lançamentos"
+        )
         itens.setStyleSheet(
             "font-size: 12px; color: #64748b;"
         )
@@ -616,7 +661,8 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
         self._recarregar_resumo()
@@ -653,7 +699,8 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
         self._recarregar_resumo()
@@ -720,7 +767,8 @@ class CreditCardInvoicePage(QWidget):
                 )
 
         self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
         self._recarregar_tabela()
