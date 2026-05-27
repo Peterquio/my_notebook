@@ -1,3 +1,5 @@
+from datetime import date
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QMessageBox, QFileDialog
@@ -24,6 +26,10 @@ from modules.finance.ui.finance_settings_page import (
     FinanceSettingsPage,
 )
 
+from modules.finance.services.credit_card_invoice_service import (
+    CreditCardInvoiceService,
+)
+
 class CreditCardDetailWindow(QWidget):
     back_requested = Signal()
     data_changed = Signal()
@@ -37,6 +43,17 @@ class CreditCardDetailWindow(QWidget):
 
         self.credit_card = credit_card
         self.username = username
+        self.invoice_service = CreditCardInvoiceService()
+
+        (
+            self.selected_invoice_year,
+            self.selected_invoice_month,
+        ) = self.invoice_service.calcular_mes_fatura(
+            purchase_date=date.today(),
+            closing_day=self.credit_card["closing_day"],
+        )
+
+        self.month_buttons = []
         self._aplicar_estilo_base()
         self._montar_interface()
 
@@ -178,52 +195,12 @@ class CreditCardDetailWindow(QWidget):
         )
         layout.addWidget(meses_titulo)
 
-        meses_visiveis = [
-            "Fev/2026",
-            "Mar/2026",
-            "Abr/2026",
-            "Mai/2026",
-            "Jun/2026",
-            "Jul/2026",
-        ]
+        self.month_buttons_layout = QVBoxLayout()
+        self.month_buttons_layout.setSpacing(6)
 
-        for mes in meses_visiveis:
-            botao_mes = QPushButton(mes)
-            botao_mes.setCursor(Qt.PointingHandCursor)
+        layout.addLayout(self.month_buttons_layout)
 
-            if mes == "Abr/2026":
-                botao_mes.setStyleSheet(
-                    """
-                    QPushButton {
-                        background-color: #ede9fe;
-                        color: #6d28d9;
-                        border: none;
-                        border-radius: 10px;
-                        font-weight: bold;
-                        text-align: left;
-                        padding: 9px 12px;
-                    }
-                    """
-                )
-            else:
-                botao_mes.setStyleSheet(
-                    """
-                    QPushButton {
-                        background-color: white;
-                        color: #64748b;
-                        border: none;
-                        border-radius: 10px;
-                        text-align: left;
-                        padding: 9px 12px;
-                    }
-
-                    QPushButton:hover {
-                        background-color: #f8fafc;
-                    }
-                    """
-                )
-
-            layout.addWidget(botao_mes)
+        self._renderizar_botoes_fatura()
 
         layout.addStretch()
 
@@ -248,6 +225,122 @@ class CreditCardDetailWindow(QWidget):
         layout.addWidget(sair)
 
         return sidebar
+
+    def _renderizar_botoes_fatura(self) -> None:
+        while self.month_buttons_layout.count():
+            item = self.month_buttons_layout.takeAt(0)
+            widget = item.widget()
+
+            if widget:
+                widget.deleteLater()
+
+        self.month_buttons = []
+
+        for deslocamento in range(-2, 3):
+            year, month = self._somar_meses_fatura(
+                self.selected_invoice_year,
+                self.selected_invoice_month,
+                deslocamento,
+            )
+
+            botao_mes = QPushButton(
+                self._formatar_mes_sidebar(year, month)
+            )
+            botao_mes.setCursor(Qt.PointingHandCursor)
+            botao_mes.setStyleSheet(
+                self._estilo_botao_mes(
+                    ativo=(
+                        year == self.selected_invoice_year
+                        and month == self.selected_invoice_month
+                    )
+                )
+            )
+
+            botao_mes.clicked.connect(
+                lambda checked=False, year=year, month=month: (
+                    self._selecionar_fatura(year, month)
+                )
+            )
+
+            self.month_buttons.append(botao_mes)
+            self.month_buttons_layout.addWidget(botao_mes)
+
+    def _selecionar_fatura(
+            self,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> None:
+        self.selected_invoice_year = invoice_year
+        self.selected_invoice_month = invoice_month
+
+        self._renderizar_botoes_fatura()
+        self._mostrar_dashboard()
+
+    def _somar_meses_fatura(
+            self,
+            year: int,
+            month: int,
+            deslocamento: int,
+    ) -> tuple[int, int]:
+        mes_total = month - 1 + deslocamento
+        novo_ano = year + mes_total // 12
+        novo_mes = mes_total % 12 + 1
+
+        return novo_ano, novo_mes
+
+    def _formatar_mes_sidebar(
+            self,
+            year: int,
+            month: int,
+    ) -> str:
+        nomes = {
+            1: "Jan",
+            2: "Fev",
+            3: "Mar",
+            4: "Abr",
+            5: "Mai",
+            6: "Jun",
+            7: "Jul",
+            8: "Ago",
+            9: "Set",
+            10: "Out",
+            11: "Nov",
+            12: "Dez",
+        }
+
+        return f"{nomes[month]}/{year}"
+
+    def _estilo_botao_mes(
+            self,
+            ativo: bool,
+    ) -> str:
+        if ativo:
+            return """
+                QPushButton {
+                    background-color: #ede9fe;
+                    color: #6d28d9;
+                    border: none;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    text-align: left;
+                    padding: 9px 12px;
+                }
+            """
+
+        return """
+            QPushButton {
+                background-color: white;
+                color: #64748b;
+                border: none;
+                border-radius: 10px;
+                text-align: left;
+                padding: 9px 12px;
+            }
+
+            QPushButton:hover {
+                background-color: #f8fafc;
+            }
+        """
 
     def _estilo_botao_sidebar(
             self,
@@ -325,6 +418,8 @@ class CreditCardDetailWindow(QWidget):
         self.invoice_page = CreditCardInvoicePage(
             credit_card=self.credit_card,
             username=self.username,
+            invoice_year=self.selected_invoice_year,
+            invoice_month=self.selected_invoice_month,
             parent=self,
         )
 

@@ -30,7 +30,6 @@ class CreditCardDetailService:
             credit_card: dict,
             sort_mode: str = "categoria",
     ) -> dict:
-
         hoje = date.today()
 
         invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
@@ -38,6 +37,20 @@ class CreditCardDetailService:
             closing_day=credit_card["closing_day"],
         )
 
+        return self.carregar_fatura_por_mes(
+            credit_card=credit_card,
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+            sort_mode=sort_mode,
+        )
+
+    def carregar_fatura_por_mes(
+            self,
+            credit_card: dict,
+            invoice_year: int,
+            invoice_month: int,
+            sort_mode: str = "categoria",
+    ) -> dict:
         lancamentos = self.expense_repository.listar_lancamentos_por_fatura(
             credit_card_id=credit_card["id"],
             invoice_year=invoice_year,

@@ -59,12 +59,16 @@ class CreditCardInvoicePage(QWidget):
             self,
             credit_card: dict,
             username: str,
+            invoice_year: int | None = None,
+            invoice_month: int | None = None,
             parent=None,
     ) -> None:
         super().__init__(parent)
 
         self.credit_card = credit_card
         self.username = username
+        self.selected_invoice_year = invoice_year
+        self.selected_invoice_month = invoice_month
 
         self.import_service = CreditCardImportService(self.username)
         self.detail_service = CreditCardDetailService(username=self.username)
@@ -80,10 +84,7 @@ class CreditCardInvoicePage(QWidget):
         self.categories = self.category_service.listar_categorias_ativas()
         self.sort_mode = "categoria"
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._montar_interface()
 
@@ -111,6 +112,23 @@ class CreditCardInvoicePage(QWidget):
 
         layout.addLayout(
             self._criar_footer()
+        )
+
+    def _carregar_fatura_selecionada(self) -> dict:
+        if (
+                self.selected_invoice_year is not None
+                and self.selected_invoice_month is not None
+        ):
+            return self.detail_service.carregar_fatura_por_mes(
+                credit_card=self.credit_card,
+                invoice_year=self.selected_invoice_year,
+                invoice_month=self.selected_invoice_month,
+                sort_mode=self.sort_mode,
+            )
+
+        return self.detail_service.carregar_fatura_atual(
+            self.credit_card,
+            sort_mode=self.sort_mode,
         )
 
     def _criar_header(self) -> QHBoxLayout:
@@ -385,10 +403,7 @@ class CreditCardInvoicePage(QWidget):
             "categoria",
         )
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
 
@@ -732,10 +747,7 @@ class CreditCardInvoicePage(QWidget):
             )
             return
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
         self.data_changed.emit()
@@ -829,10 +841,7 @@ class CreditCardInvoicePage(QWidget):
             f"{total_ajustes} ajustes de fatura foram importados.",
         )
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
         self.data_changed.emit()
@@ -867,10 +876,7 @@ class CreditCardInvoicePage(QWidget):
             invoice_repository=invoice_repository,
         )
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
 
@@ -926,10 +932,7 @@ class CreditCardInvoicePage(QWidget):
                     QColor(categoria["color"])
                 )
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
 
@@ -962,10 +965,7 @@ class CreditCardInvoicePage(QWidget):
             )
             return
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
         self.data_changed.emit()
@@ -1022,10 +1022,7 @@ class CreditCardInvoicePage(QWidget):
             )
             return
 
-        self.invoice_data = self.detail_service.carregar_fatura_atual(
-            self.credit_card,
-            sort_mode=self.sort_mode,
-        )
+        self.invoice_data = self._carregar_fatura_selecionada()
 
         self._recarregar_tabela()
         self.data_changed.emit()
