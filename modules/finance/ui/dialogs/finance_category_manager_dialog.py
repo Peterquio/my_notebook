@@ -1,5 +1,4 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -9,10 +8,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
-    QAbstractSpinBox,
 )
 
 from modules.finance.services.finance_category_service import (
@@ -60,7 +57,7 @@ class FinanceCategoryManagerDialog(QDialog):
                 color: #0f172a;
             }
 
-            QLineEdit, QSpinBox {
+            QLineEdit {
                 background-color: white;
                 border: 1px solid #e2e8f0;
                 border-radius: 10px;
@@ -370,22 +367,50 @@ class FinanceCategoryManagerDialog(QDialog):
         nome = QLineEdit(categoria["name"])
         nome.setFixedHeight(34)
 
-        ordem = QSpinBox()
-        ordem.setFixedHeight(34)
-        ordem.setFocusPolicy(Qt.StrongFocus)
-        ordem.wheelEvent = lambda event: event.ignore()
-        ordem.setMinimum(1)
-        ordem.setMaximum(99)
-        ordem.setValue(
-            categoria["display_number"] or 0
+        ordem = QLabel(str(categoria["display_number"] or 0))
+        ordem.setAlignment(Qt.AlignCenter)
+        ordem.setFixedSize(42, 34)
+        ordem.setStyleSheet(
+            """
+            QLabel {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                color: #334155;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            """
         )
-        ordem.setFixedWidth(80)
+
+        subir = QPushButton("↑")
+        subir.setFixedSize(34, 34)
+        subir.setCursor(Qt.PointingHandCursor)
+
+        descer = QPushButton("↓")
+        descer.setFixedSize(34, 34)
+        descer.setCursor(Qt.PointingHandCursor)
 
         remover = QPushButton("Remover")
         remover.setFixedHeight(34)
         remover.setCursor(Qt.PointingHandCursor)
 
         if categoria["is_active"]:
+            subir.clicked.connect(
+                lambda checked=False,
+                       category_id=categoria["id"]: self._mover_categoria(
+                    category_id=category_id,
+                    direcao=-1,
+                )
+            )
+
+            descer.clicked.connect(
+                lambda checked=False,
+                       category_id=categoria["id"]: self._mover_categoria(
+                    category_id=category_id,
+                    direcao=1,
+                )
+            )
             remover.setText("Remover")
             remover.clicked.connect(
                 lambda: self._remover_categoria(
@@ -397,6 +422,8 @@ class FinanceCategoryManagerDialog(QDialog):
             remover.setText("Reativar")
             nome.setEnabled(False)
             ordem.setEnabled(False)
+            subir.setEnabled(False)
+            descer.setEnabled(False)
             bolinha.setEnabled(False)
             remover.clicked.connect(
                 lambda: self._reativar_categoria(
@@ -421,20 +448,27 @@ class FinanceCategoryManagerDialog(QDialog):
         if categoria.get("is_protected"):
             nome.setEnabled(False)
             ordem.setEnabled(False)
+            subir.setEnabled(False)
+            descer.setEnabled(False)
             remover.setEnabled(False)
             remover.setText("Protegida")
 
         layout.addWidget(bolinha)
         layout.addWidget(nome, 1)
         layout.addWidget(QLabel("Ordem"))
+        layout.addWidget(subir)
         layout.addWidget(ordem)
+        layout.addWidget(descer)
         layout.addWidget(remover)
 
         self.category_rows.append(
             {
                 "id": categoria["id"],
+                "card": card,
                 "nome_input": nome,
-                "ordem_input": ordem,
+                "ordem_label": ordem,
+                "display_number": categoria["display_number"] or 0,
+                "is_active": categoria["is_active"],
                 "cor_estado": cor_editada,
                 "is_protected": categoria.get("is_protected"),
             }
@@ -507,6 +541,78 @@ class FinanceCategoryManagerDialog(QDialog):
             """
         )
 
+    def _mover_categoria(
+            self,
+            category_id: int,
+            direcao: int,
+    ) -> None:
+        linhas_ativas = [
+            row
+            for row in self.category_rows
+            if row.get("is_active") and not row.get("is_protected")
+        ]
+
+        linhas_ativas.sort(
+            key=lambda row: row["display_number"]
+        )
+
+        indice_atual = next(
+            (
+                index
+                for index, row in enumerate(linhas_ativas)
+                if row["id"] == category_id
+            ),
+            None,
+        )
+
+        if indice_atual is None:
+            return
+
+        novo_indice = indice_atual + direcao
+
+        if novo_indice < 0 or novo_indice >= len(linhas_ativas):
+            return
+
+        linha_atual = linhas_ativas[indice_atual]
+        linha_destino = linhas_ativas[novo_indice]
+
+        linha_atual["display_number"], linha_destino["display_number"] = (
+            linha_destino["display_number"],
+            linha_atual["display_number"],
+        )
+
+        linha_atual["ordem_label"].setText(
+            str(linha_atual["display_number"])
+        )
+
+        linha_destino["ordem_label"].setText(
+            str(linha_destino["display_number"])
+        )
+
+        self._reordenar_cards_visualmente()
+
+    def _reordenar_cards_visualmente(self) -> None:
+        rows_ativas = [
+            row
+            for row in self.category_rows
+            if row.get("is_active")
+        ]
+
+        rows_ativas.sort(
+            key=lambda row: row["display_number"]
+        )
+
+        for row in rows_ativas:
+            self.lista_layout.removeWidget(
+                row["card"]
+            )
+
+        for index, row in enumerate(rows_ativas):
+            self.lista_layout.insertWidget(
+                index,
+                row["card"]
+            )
+
     def _salvar_todas_categorias(self) -> None:
         try:
             numeros_usados = {}
@@ -515,7 +621,7 @@ class FinanceCategoryManagerDialog(QDialog):
                 if row["is_protected"]:
                     continue
 
-                numero = row["ordem_input"].value()
+                numero = row["display_number"]
 
                 if numero in numeros_usados:
                     QMessageBox.warning(
@@ -535,7 +641,7 @@ class FinanceCategoryManagerDialog(QDialog):
                     category_id=row["id"],
                     name=row["nome_input"].text(),
                     color=row["cor_estado"]["value"],
-                    display_number=row["ordem_input"].value(),
+                    display_number=row["display_number"],
                 )
 
         except Exception as erro:

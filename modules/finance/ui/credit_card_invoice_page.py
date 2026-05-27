@@ -1,19 +1,15 @@
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QDate
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6.QtWidgets import (
-    QDialog,
-    QWidget,
-    QFrame,
-    QLabel,
-    QPushButton,
-    QLineEdit,
-    QComboBox,
-    QHBoxLayout,
-    QVBoxLayout,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
+    QDialog, QWidget,
+    QFrame, QLabel,
+    QPushButton, QLineEdit,
+    QComboBox, QHBoxLayout,
+    QVBoxLayout, QTableWidget,
+    QTableWidgetItem, QHeaderView,
+    QFormLayout, QDateEdit,
+    QDoubleSpinBox, QTextEdit,
 )
 
 from modules.finance.services.importers.credit_card_import_service import (
@@ -47,6 +43,15 @@ from modules.finance.services.finance_category_service import (
 from modules.finance.services.credit_card_portable_data_service import (
     CreditCardPortableDataService,
 )
+
+from modules.finance.ui.dialogs.credit_card_previous_payment_dialog import (
+    CreditCardPreviousPaymentDialog,
+)
+
+from modules.finance.ui.dialogs.credit_card_previous_payment_dialog import (
+    CreditCardPreviousPaymentDialog,
+)
+
 
 class CreditCardInvoicePage(QWidget):
     back_requested = Signal()
@@ -175,16 +180,16 @@ class CreditCardInvoicePage(QWidget):
             self.invoice_data["total_fatura_cents"]
         )
 
-        total_lancamentos = str(
-            self.invoice_data["total_lancamentos"]
+        valor_a_pagar = self.detail_service._formatar_moeda(
+            self.invoice_data["valor_a_pagar_cents"]
         )
 
         cards = [
-            ("📅", "Vencimento", "10/04", "Faltam 2 dias"),
-            ("💳", "Fatura Atual", total_fatura, "Total da fatura"),
+            ("📅", "Vencimento", "10/04", "Data para pagamento"),
+            ("💳", "Valor Total", total_fatura, "Total da fatura"),
+            ("🧾", "Valor a Pagar", valor_a_pagar, "Após pagamentos e créditos"),
+            ("🕘", "Parcelamentos Futuros", "R$ 2.184,22", "Próximas parcelas"),
             ("👛", "Limite Disponível", "R$ 6.945,48", "de R$ 12.000,00"),
-            ("🕘", "Total Parcelado Futuro", "R$ 2.184,22", "Próximas parcelas"),
-            ("🧾", "Total de Lançamentos", total_lancamentos, "Este mês"),
         ]
 
         for icon, title, value, subtitle in cards:
@@ -405,6 +410,9 @@ class CreditCardInvoicePage(QWidget):
         table.setShowGrid(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.cellDoubleClicked.connect(
+            self._editar_lancamento_duplo_clique
+        )
         table.setAlternatingRowColors(False)
 
         header = table.horizontalHeader()
@@ -495,6 +503,7 @@ class CreditCardInvoicePage(QWidget):
 
         for col, value in enumerate(valores):
             item = QTableWidgetItem(value)
+            item.setData(Qt.UserRole, row)
             item.setForeground(QColor("#334155"))
 
             if col == 1:
@@ -775,16 +784,48 @@ class CreditCardInvoicePage(QWidget):
         if dialog.exec() != QDialog.Accepted:
             return
 
+        adjustments = self.import_service.csv_handler.import_adjustments(
+            csv_path
+        )
+
+        pagamentos = [
+            adjustment
+            for adjustment in adjustments
+            if adjustment.adjustment_type == "payment_received"
+        ]
+
+        pagamentos_fatura_anterior = set()
+
+        if pagamentos:
+            previous_payment_dialog = CreditCardPreviousPaymentDialog(
+                adjustments=pagamentos,
+                parent=self,
+            )
+
+            if previous_payment_dialog.exec() != QDialog.Accepted:
+                return
+
+            pagamentos_fatura_anterior = (
+                previous_payment_dialog.obter_pagamentos_fatura_anterior()
+            )
+
         total_salvo = self.import_service.confirmar_importacao(
             credit_card=self.credit_card,
             expenses=expenses,
             category_id=1,
         )
 
+        total_ajustes = self.import_service.importar_ajustes_csv(
+            credit_card=self.credit_card,
+            csv_path=csv_path,
+            previous_payment_keys=pagamentos_fatura_anterior,
+        )
+
         QMessageBox.information(
             self,
             "Importação concluída",
-            f"{total_salvo} lançamentos foram salvos no banco.",
+            f"{total_salvo} lançamentos foram salvos no banco.\n"
+            f"{total_ajustes} ajustes de fatura foram importados.",
         )
 
         self.invoice_data = self.detail_service.carregar_fatura_atual(
@@ -900,4 +941,131 @@ class CreditCardInvoicePage(QWidget):
 
         self._recarregar_tabela()
 
+        self.data_changed.emit()
+
+    def _editar_lancamento_duplo_clique(
+            self,
+            row_index: int,
+            column_index: int,
+    ) -> None:
+        item = self.table.item(row_index, 2)
+
+        if item is None:
+            return
+
+        row_data = item.data(Qt.UserRole)
+
+        if not row_data or row_data.get("type") != "expense":
+            return
+
+        self._abrir_dialog_edicao_lancamento(row_data)
+
+    def _abrir_dialog_edicao_lancamento(
+            self,
+            row_data: dict,
+    ) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Editar lançamento")
+        dialog.setMinimumWidth(420)
+
+        layout = QVBoxLayout(dialog)
+
+        form = QFormLayout()
+
+        descricao = QLineEdit(row_data["description"])
+
+        data = QDateEdit()
+        data.setCalendarPopup(True)
+
+        dia, mes = row_data["date"].split("/")
+        ano = self.invoice_data["invoice_year"]
+
+        data.setDate(
+            QDate(
+                int(ano),
+                int(mes),
+                int(dia),
+            )
+        )
+
+        valor = QDoubleSpinBox()
+        valor.setMaximum(999999.99)
+        valor.setDecimals(2)
+        valor.setPrefix("R$ ")
+
+        valor_texto = (
+            row_data["amount"]
+            .replace("R$ ", "")
+            .replace(".", "")
+            .replace(",", ".")
+        )
+        valor.setValue(float(valor_texto))
+
+        categoria = QComboBox()
+
+        for categoria_item in self.categories:
+            categoria.addItem(
+                categoria_item["name"],
+                categoria_item["id"],
+            )
+
+        categoria_index = categoria.findData(
+            row_data.get("category_id")
+        )
+
+        if categoria_index >= 0:
+            categoria.setCurrentIndex(categoria_index)
+
+        observacoes = QTextEdit()
+        observacoes.setFixedHeight(80)
+
+        form.addRow("Descrição:", descricao)
+        form.addRow("Data:", data)
+        form.addRow("Valor:", valor)
+        form.addRow("Categoria:", categoria)
+        form.addRow("Observações:", observacoes)
+
+        layout.addLayout(form)
+
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+
+        cancelar = QPushButton("Cancelar")
+        salvar = QPushButton("Salvar")
+
+        cancelar.clicked.connect(dialog.reject)
+        salvar.clicked.connect(dialog.accept)
+
+        botoes.addWidget(cancelar)
+        botoes.addWidget(salvar)
+
+        layout.addLayout(botoes)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            self.detail_service.atualizar_lancamento(
+                credit_card=self.credit_card,
+                expense_id=row_data["expense_id"],
+                category_id=categoria.currentData(),
+                effective_description=descricao.text().strip(),
+                effective_purchase_date=data.date().toString("yyyy-MM-dd"),
+                effective_amount_cents=int(round(valor.value() * 100)),
+                notes=observacoes.toPlainText().strip(),
+            )
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao editar lançamento",
+                str(erro),
+            )
+            return
+
+        self.invoice_data = self.detail_service.carregar_fatura_atual(
+            self.credit_card,
+            sort_mode=self.sort_mode,
+        )
+
+        self._recarregar_tabela()
         self.data_changed.emit()

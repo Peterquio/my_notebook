@@ -73,3 +73,28 @@ class CreditCardCsvImportHandler:
                 sample_rows.append(row)
 
         return headers, sample_rows
+
+    def import_adjustments(
+            self,
+            csv_path: str,
+    ):
+        headers, sample_rows = self._read_csv_signature(
+            csv_path
+        )
+
+        converter = self._detect_converter(
+            headers,
+            sample_rows,
+        )
+
+        if converter is None:
+            raise ValueError(
+                "Não foi possível identificar o formato do CSV."
+            )
+
+        if not hasattr(converter, "convert_adjustments"):
+            return []
+
+        return converter.convert_adjustments(
+            csv_path
+        )

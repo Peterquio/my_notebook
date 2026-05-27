@@ -255,4 +255,33 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
     FOREIGN KEY (category_id)
         REFERENCES finance_categories(id)
 );
+
+CREATE TABLE IF NOT EXISTS finance_credit_card_invoice_adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    credit_card_id INTEGER NOT NULL,
+    invoice_id INTEGER,
+
+    adjustment_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+
+    adjustment_date TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+
+    source_type TEXT,
+    source_reference TEXT,
+
+    notes TEXT,
+
+    status TEXT NOT NULL DEFAULT 'active',
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id),
+
+    FOREIGN KEY (invoice_id)
+        REFERENCES finance_credit_card_invoices(id)
+);
 """

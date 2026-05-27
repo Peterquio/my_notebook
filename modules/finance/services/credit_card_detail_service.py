@@ -1,8 +1,9 @@
 from datetime import date
 
-from modules.finance.repositories.credit_card_expense_repository import (
-    CreditCardExpenseRepository,
+from modules.finance.repositories.credit_card_invoice_repository import (
+    CreditCardInvoiceRepository,
 )
+
 from modules.finance.services.credit_card_invoice_service import (
     CreditCardInvoiceService,
 )
@@ -11,12 +12,17 @@ from modules.finance.repositories.credit_card_expense_repository import (
     CreditCardExpenseRepository,
 )
 
+from modules.finance.repositories.credit_card_invoice_adjustment_repository import (
+    CreditCardInvoiceAdjustmentRepository,
+)
+
 class CreditCardDetailService:
     def __init__(self, username: str) -> None:
         self.username = username
-
+        self.invoice_repository = CreditCardInvoiceRepository(username)
         self.expense_repository = CreditCardExpenseRepository(username)
         self.invoice_service = CreditCardInvoiceService()
+        self.adjustment_repository = CreditCardInvoiceAdjustmentRepository(username)
 
     def carregar_fatura_atual(
             self,
@@ -48,10 +54,20 @@ class CreditCardDetailService:
             for lancamento in lancamentos
         )
 
+        total_ajustes_cents = self.adjustment_repository.somar_ajustes_fatura(
+            credit_card_id=credit_card["id"],
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
+
+        valor_a_pagar_cents = total_fatura_cents + total_ajustes_cents
+
         return {
             "invoice_year": invoice_year,
             "invoice_month": invoice_month,
             "total_fatura_cents": total_fatura_cents,
+            "total_ajustes_cents": total_ajustes_cents,
+            "valor_a_pagar_cents": valor_a_pagar_cents,
             "total_lancamentos": len(lancamentos),
             "rows": rows,
         }
@@ -151,4 +167,60 @@ class CreditCardDetailService:
         expense_repository.atualizar_categoria(
             expense_id=expense_id,
             category_id=category_id,
+        )
+
+    def atualizar_lancamento(
+            self,
+            credit_card: dict,
+            expense_id: int,
+            category_id: int,
+            effective_description: str,
+            effective_purchase_date: str,
+            effective_amount_cents: int,
+            notes: str | None = None,
+    ) -> None:
+        purchase_date = date.fromisoformat(effective_purchase_date)
+
+        invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
+            purchase_date=purchase_date,
+            closing_day=credit_card["closing_day"],
+        )
+
+        closing_date = self.invoice_service.montar_data_segura(
+            invoice_year,
+            invoice_month,
+            credit_card["closing_day"],
+        )
+
+        due_date = self.invoice_service.montar_data_segura(
+            invoice_year,
+            invoice_month,
+            credit_card["due_day"],
+        )
+
+        invoice = self.invoice_repository.buscar_por_cartao_mes(
+            credit_card_id=credit_card["id"],
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
+
+        if invoice is None:
+            invoice_id = self.invoice_repository.criar_fatura(
+                credit_card_id=credit_card["id"],
+                invoice_year=invoice_year,
+                invoice_month=invoice_month,
+                closing_date=closing_date.isoformat(),
+                due_date=due_date.isoformat(),
+            )
+        else:
+            invoice_id = invoice["id"]
+
+        self.expense_repository.atualizar_lancamento(
+            expense_id=expense_id,
+            invoice_id=invoice_id,
+            category_id=category_id,
+            effective_description=effective_description,
+            effective_purchase_date=effective_purchase_date,
+            effective_amount_cents=effective_amount_cents,
+            notes=notes,
         )

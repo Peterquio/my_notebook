@@ -15,6 +15,10 @@ from modules.finance.services.importers.credit_card_csv_converters import (
     ImportedCreditCardExpense,
 )
 
+from modules.finance.repositories.credit_card_invoice_adjustment_repository import (
+    CreditCardInvoiceAdjustmentRepository,
+)
+
 
 class CreditCardImportService:
     def __init__(
@@ -26,6 +30,7 @@ class CreditCardImportService:
         self.invoice_repository = CreditCardInvoiceRepository(username)
         self.expense_repository = CreditCardExpenseRepository(username)
         self.invoice_service = CreditCardInvoiceService()
+        self.adjustment_repository = CreditCardInvoiceAdjustmentRepository(username)
 
     def importar_preview(
             self,
@@ -48,6 +53,41 @@ class CreditCardImportService:
             expense.installment_total,
         )
 
+    def _obter_ou_criar_fatura(
+            self,
+            credit_card: dict,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> int:
+        closing_date = self.invoice_service.montar_data_segura(
+            invoice_year,
+            invoice_month,
+            credit_card["closing_day"],
+        )
+
+        due_date = self.invoice_service.montar_data_segura(
+            invoice_year,
+            invoice_month,
+            credit_card["due_day"],
+        )
+
+        invoice = self.invoice_repository.buscar_por_cartao_mes(
+            credit_card_id=credit_card["id"],
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
+
+        if invoice is None:
+            return self.invoice_repository.criar_fatura(
+                credit_card_id=credit_card["id"],
+                invoice_year=invoice_year,
+                invoice_month=invoice_month,
+                closing_date=closing_date.isoformat(),
+                due_date=due_date.isoformat(),
+            )
+
+        return invoice["id"]
+
     def confirmar_importacao(
             self,
             credit_card: dict,
@@ -64,19 +104,24 @@ class CreditCardImportService:
 
         ja_importados_agora = defaultdict(int)
 
+        total_inicial_no_banco = {}
+
+        for assinatura in total_por_assinatura:
+            total_inicial_no_banco[assinatura] = (
+                self.expense_repository.contar_lancamentos_por_assinatura(
+                    credit_card_id=credit_card["id"],
+                    original_description=assinatura[0],
+                    original_purchase_date=assinatura[1],
+                    original_amount_cents=assinatura[2],
+                    installment_number=assinatura[3],
+                    installment_total=assinatura[4],
+                )
+            )
+
         for expense in expenses:
             assinatura = self._gerar_assinatura_importacao(expense)
 
-            total_no_banco = self.expense_repository.contar_lancamentos_por_assinatura(
-                credit_card_id=credit_card["id"],
-                original_description=assinatura[0],
-                original_purchase_date=assinatura[1],
-                original_amount_cents=assinatura[2],
-                installment_number=assinatura[3],
-                installment_total=assinatura[4],
-            )
-
-            if total_no_banco + ja_importados_agora[assinatura] >= total_por_assinatura[assinatura]:
+            if total_inicial_no_banco[assinatura] + ja_importados_agora[assinatura] >= total_por_assinatura[assinatura]:
                 continue
 
             invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
@@ -84,34 +129,17 @@ class CreditCardImportService:
                 closing_day=credit_card["closing_day"],
             )
 
+            invoice_id = self._obter_ou_criar_fatura(
+                credit_card=credit_card,
+                invoice_year=invoice_year,
+                invoice_month=invoice_month,
+            )
+
             closing_date = self.invoice_service.montar_data_segura(
                 invoice_year,
                 invoice_month,
                 credit_card["closing_day"],
             )
-
-            due_date = self.invoice_service.montar_data_segura(
-                invoice_year,
-                invoice_month,
-                credit_card["due_day"],
-            )
-
-            invoice = self.invoice_repository.buscar_por_cartao_mes(
-                credit_card_id=credit_card["id"],
-                invoice_year=invoice_year,
-                invoice_month=invoice_month,
-            )
-
-            if invoice is None:
-                invoice_id = self.invoice_repository.criar_fatura(
-                    credit_card_id=credit_card["id"],
-                    invoice_year=invoice_year,
-                    invoice_month=invoice_month,
-                    closing_date=closing_date.isoformat(),
-                    due_date=due_date.isoformat(),
-                )
-            else:
-                invoice_id = invoice["id"]
 
             self.expense_repository.criar_lancamento(
                 credit_card_id=credit_card["id"],
@@ -133,6 +161,69 @@ class CreditCardImportService:
             )
 
             ja_importados_agora[assinatura] += 1
+            total_salvo += 1
+
+        return total_salvo
+
+    def importar_ajustes_csv(
+            self,
+            credit_card: dict,
+            csv_path: str,
+            previous_payment_keys: set[tuple] | None = None,
+    ) -> int:
+        adjustments = self.csv_handler.import_adjustments(csv_path)
+
+        if previous_payment_keys is None:
+            previous_payment_keys = set()
+
+        total_salvo = 0
+
+        for adjustment in adjustments:
+            invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
+                purchase_date=adjustment.adjustment_date,
+                closing_day=credit_card["closing_day"],
+            )
+
+            adjustment_key = (
+                adjustment.adjustment_date.isoformat(),
+                adjustment.description,
+                adjustment.amount_cents,
+                adjustment.raw_title,
+            )
+
+            adjustment_type = adjustment.adjustment_type
+
+            if adjustment_key in previous_payment_keys:
+                adjustment_type = "previous_invoice_payment"
+
+            invoice_id = self._obter_ou_criar_fatura(
+                credit_card=credit_card,
+                invoice_year=invoice_year,
+                invoice_month=invoice_month,
+            )
+
+            if self.adjustment_repository.existe_ajuste_importado(
+                    credit_card_id=credit_card["id"],
+                    description=adjustment.description,
+                    adjustment_date=adjustment.adjustment_date.isoformat(),
+                    amount_cents=adjustment.amount_cents,
+                    source_type=adjustment.source,
+                    source_reference=adjustment.raw_title,
+            ):
+                continue
+
+            self.adjustment_repository.criar_ajuste(
+                credit_card_id=credit_card["id"],
+                invoice_id=invoice_id,
+                adjustment_type=adjustment_type,
+                description=adjustment.description,
+                adjustment_date=adjustment.adjustment_date.isoformat(),
+                amount_cents=adjustment.amount_cents,
+                source_type=adjustment.source,
+                source_reference=adjustment.raw_title,
+                notes=f"Ajuste importado via CSV - {adjustment.source}",
+            )
+
             total_salvo += 1
 
         return total_salvo

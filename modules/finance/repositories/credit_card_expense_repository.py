@@ -172,7 +172,11 @@ class CreditCardExpenseRepository:
                 e.id ASC
             """,
             "parcelas": """
-                e.installment_number ASC,
+                CASE
+                    WHEN e.installment_total > 1 THEN 0
+                    ELSE 1
+                END ASC,
+                e.installment_number DESC,
                 e.effective_purchase_date ASC,
                 e.id ASC
             """,
@@ -349,3 +353,42 @@ class CreditCardExpenseRepository:
         row = cursor.fetchone()
 
         return int(row["total"] or 0)
+
+    def atualizar_lancamento(
+            self,
+            expense_id: int,
+            invoice_id: int,
+            category_id: int,
+            effective_description: str,
+            effective_purchase_date: str,
+            effective_amount_cents: int,
+            notes: str | None = None,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                invoice_id = ?,
+                category_id = ?,
+                effective_description = ?,
+                effective_purchase_date = ?,
+                effective_amount_cents = ?,
+                notes = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status != 'cancelled'
+            """,
+            (
+                invoice_id,
+                category_id,
+                effective_description,
+                effective_purchase_date,
+                effective_amount_cents,
+                notes,
+                expense_id,
+            ),
+        )
+
+        self.conexao.commit()

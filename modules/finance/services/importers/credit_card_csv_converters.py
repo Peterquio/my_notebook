@@ -15,6 +15,15 @@ class ImportedCreditCardExpense:
     raw_title: str
     source: str
 
+@dataclass
+class ImportedCreditCardAdjustment:
+    adjustment_date: date
+    description: str
+    amount_cents: int
+    adjustment_type: str
+    raw_title: str
+    source: str
+
 
 class NubankCsvConverter:
     source_name = "Nubank"
@@ -119,3 +128,59 @@ class NubankCsvConverter:
         )
 
         return int(valor * 100)
+
+    def convert_adjustments(
+            self,
+            csv_path: str,
+    ) -> list[ImportedCreditCardAdjustment]:
+
+        adjustments = []
+
+        with open(
+                csv_path,
+                mode="r",
+                encoding="utf-8",
+                newline="",
+        ) as arquivo:
+            reader = csv.DictReader(arquivo)
+
+            for row in reader:
+                amount_cents = self._converter_valor_para_centavos(
+                    row["amount"]
+                )
+
+                if amount_cents >= 0:
+                    continue
+
+                raw_title = row["title"].strip()
+                adjustment_type = self._classificar_ajuste(raw_title)
+
+                adjustments.append(
+                    ImportedCreditCardAdjustment(
+                        adjustment_date=date.fromisoformat(row["date"]),
+                        description=raw_title,
+                        amount_cents=amount_cents,
+                        adjustment_type=adjustment_type,
+                        raw_title=raw_title,
+                        source=self.source_name,
+                    )
+                )
+
+        return adjustments
+
+    def _classificar_ajuste(
+            self,
+            title: str,
+    ) -> str:
+        titulo = title.lower()
+
+        if "pagamento recebido" in titulo:
+            return "payment_received"
+
+        if "desconto antecipação" in titulo:
+            return "early_payment_discount"
+
+        if "crédito de parcelamento" in titulo:
+            return "installment_credit"
+
+        return "other_credit"
