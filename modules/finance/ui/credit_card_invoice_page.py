@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6.QtWidgets import (
@@ -8,8 +8,6 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout,
     QVBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView,
-    QFormLayout, QDateEdit,
-    QDoubleSpinBox, QTextEdit,
 )
 
 from modules.finance.services.importers.credit_card_import_service import (
@@ -44,8 +42,8 @@ from modules.finance.services.credit_card_portable_data_service import (
     CreditCardPortableDataService,
 )
 
-from modules.finance.ui.dialogs.credit_card_previous_payment_dialog import (
-    CreditCardPreviousPaymentDialog,
+from modules.finance.ui.dialogs.credit_card_expense_dialog import (
+    CreditCardExpenseDialog,
 )
 
 from modules.finance.ui.dialogs.credit_card_previous_payment_dialog import (
@@ -355,6 +353,9 @@ class CreditCardInvoicePage(QWidget):
             """
         )
 
+        novo.clicked.connect(
+            self._abrir_dialog_novo_lancamento
+        )
         layout.addWidget(busca)
         layout.addWidget(categorias)
         layout.addWidget(tipos)
@@ -917,15 +918,6 @@ class CreditCardInvoicePage(QWidget):
             None,
         )
 
-        categoria = next(
-            (
-                categoria
-                for categoria in self.categories
-                if categoria["id"] == category_id
-            ),
-            None,
-        )
-
         if categoria:
             cor_item = self.table.item(row_index, 1)
 
@@ -941,6 +933,41 @@ class CreditCardInvoicePage(QWidget):
 
         self._recarregar_tabela()
 
+        self.data_changed.emit()
+
+    def _abrir_dialog_novo_lancamento(self) -> None:
+        dialog = CreditCardExpenseDialog(
+            categories=self.categories,
+            invoice_year=self.invoice_data["invoice_year"],
+            row_data=None,
+            mode="create",
+            parent=self,
+        )
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        dados_lancamento = dialog.obter_dados()
+
+        try:
+            self.detail_service.criar_lancamento_manual(
+                credit_card=self.credit_card,
+                **dados_lancamento,
+            )
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao criar lançamento",
+                str(erro),
+            )
+            return
+
+        self.invoice_data = self.detail_service.carregar_fatura_atual(
+            self.credit_card,
+            sort_mode=self.sort_mode,
+        )
+
+        self._recarregar_tabela()
         self.data_changed.emit()
 
     def _editar_lancamento_duplo_clique(
@@ -964,96 +991,29 @@ class CreditCardInvoicePage(QWidget):
             self,
             row_data: dict,
     ) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Editar lançamento")
-        dialog.setMinimumWidth(420)
-
-        layout = QVBoxLayout(dialog)
-
-        form = QFormLayout()
-
-        descricao = QLineEdit(row_data["description"])
-
-        data = QDateEdit()
-        data.setCalendarPopup(True)
-
-        dia, mes = row_data["date"].split("/")
-        ano = self.invoice_data["invoice_year"]
-
-        data.setDate(
-            QDate(
-                int(ano),
-                int(mes),
-                int(dia),
-            )
+        dialog = CreditCardExpenseDialog(
+            categories=self.categories,
+            invoice_year=self.invoice_data["invoice_year"],
+            row_data=row_data,
+            mode="edit",
+            parent=self,
         )
-
-        valor = QDoubleSpinBox()
-        valor.setMaximum(999999.99)
-        valor.setDecimals(2)
-        valor.setPrefix("R$ ")
-
-        valor_texto = (
-            row_data["amount"]
-            .replace("R$ ", "")
-            .replace(".", "")
-            .replace(",", ".")
-        )
-        valor.setValue(float(valor_texto))
-
-        categoria = QComboBox()
-
-        for categoria_item in self.categories:
-            categoria.addItem(
-                categoria_item["name"],
-                categoria_item["id"],
-            )
-
-        categoria_index = categoria.findData(
-            row_data.get("category_id")
-        )
-
-        if categoria_index >= 0:
-            categoria.setCurrentIndex(categoria_index)
-
-        observacoes = QTextEdit()
-        observacoes.setFixedHeight(80)
-
-        form.addRow("Descrição:", descricao)
-        form.addRow("Data:", data)
-        form.addRow("Valor:", valor)
-        form.addRow("Categoria:", categoria)
-        form.addRow("Observações:", observacoes)
-
-        layout.addLayout(form)
-
-        botoes = QHBoxLayout()
-        botoes.addStretch()
-
-        cancelar = QPushButton("Cancelar")
-        salvar = QPushButton("Salvar")
-
-        cancelar.clicked.connect(dialog.reject)
-        salvar.clicked.connect(dialog.accept)
-
-        botoes.addWidget(cancelar)
-        botoes.addWidget(salvar)
-
-        layout.addLayout(botoes)
 
         if dialog.exec() != QDialog.Accepted:
             return
+
+        dados_lancamento = dialog.obter_dados()
+
+        dados_lancamento.pop("installment_number", None)
+        dados_lancamento.pop("installment_total", None)
 
         try:
             self.detail_service.atualizar_lancamento(
                 credit_card=self.credit_card,
                 expense_id=row_data["expense_id"],
-                category_id=categoria.currentData(),
-                effective_description=descricao.text().strip(),
-                effective_purchase_date=data.date().toString("yyyy-MM-dd"),
-                effective_amount_cents=int(round(valor.value() * 100)),
-                notes=observacoes.toPlainText().strip(),
+                **dados_lancamento,
             )
+
         except Exception as erro:
             QMessageBox.warning(
                 self,
