@@ -220,7 +220,7 @@ class CreditCardImportService:
                     familias_antecipadas_por_assinatura[
                         self._gerar_assinatura_importacao(item)
                     ] = familia_base
-                    
+
         ja_importados_agora = defaultdict(int)
 
         total_inicial_no_banco = {}

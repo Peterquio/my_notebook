@@ -141,10 +141,116 @@ class CreditCardDetailService:
                     "installment": texto_parcela,
                     "remaining": texto_restante,
                     "amount": self._formatar_moeda(valor_parcela),
+                    "is_last_installment": total_parcelas > 1 and parcela_atual == total_parcelas,
                 }
             )
 
         return rows
+
+    def formatar_moeda(
+            self,
+            amount_cents: int,
+    ) -> str:
+        return self._formatar_moeda(amount_cents)
+
+    def montar_cards_resumo_fatura(
+            self,
+            credit_card: dict,
+            invoice_data: dict,
+    ) -> list[dict]:
+        hoje = date.today()
+
+        current_invoice_year, current_invoice_month = (
+            self.invoice_service.calcular_mes_fatura(
+                purchase_date=hoje,
+                closing_day=credit_card["closing_day"],
+            )
+        )
+
+        total_fatura_atual_cents = self.expense_repository.somar_fatura(
+            credit_card_id=credit_card["id"],
+            invoice_year=current_invoice_year,
+            invoice_month=current_invoice_month,
+        )
+
+        total_ajustes_atual_cents = (
+            self.adjustment_repository.somar_ajustes_fatura(
+                credit_card_id=credit_card["id"],
+                invoice_year=current_invoice_year,
+                invoice_month=current_invoice_month,
+            )
+        )
+
+        valor_a_pagar_atual_cents = (
+            total_fatura_atual_cents + total_ajustes_atual_cents
+        )
+
+        total_faturas_futuras_cents = (
+            self.expense_repository.somar_faturas_futuras(
+                credit_card_id=credit_card["id"],
+                invoice_year=current_invoice_year,
+                invoice_month=current_invoice_month,
+            )
+        )
+
+        limite_total_cents = credit_card["limit_amount_cents"]
+
+        limite_disponivel_cents = (
+            limite_total_cents
+            - valor_a_pagar_atual_cents
+            - total_faturas_futuras_cents
+        )
+
+        return [
+            {
+                "icon": "📅",
+                "title": "Fatura",
+                "value": f"{invoice_data['invoice_month']:02d}/{invoice_data['invoice_year']}",
+                "subtitle": "Mês selecionado",
+            },
+            {
+                "icon": "💳",
+                "title": "Valor Total",
+                "value": self._formatar_moeda(
+                    invoice_data["total_fatura_cents"]
+                ),
+                "subtitle": "Total da fatura exibida",
+            },
+            {
+                "icon": "🧾",
+                "title": "Valor a Pagar",
+                "value": self._formatar_moeda(
+                    invoice_data["valor_a_pagar_cents"]
+                ),
+                "subtitle": "Após pagamentos e créditos",
+            },
+            {
+                "icon": "🕘",
+                "title": "Próximas Faturas",
+                "value": self._formatar_moeda(
+                    total_faturas_futuras_cents
+                ),
+                "subtitle": "Parcelas e lançamentos futuros",
+            },
+            {
+                "icon": "👛",
+                "title": "Limite Disponível",
+                "value": self._formatar_moeda(
+                    limite_disponivel_cents
+                ),
+                "subtitle": f"de {self._formatar_moeda(limite_total_cents)}",
+            },
+        ]
+
+    def reprocessar_faturas_cartao(
+            self,
+            credit_card: dict,
+    ) -> int:
+        return self.invoice_service.reprocessar_faturas_cartao(
+            credit_card=credit_card,
+            expense_repository=self.expense_repository,
+            invoice_repository=self.invoice_repository,
+        )
 
     def _formatar_moeda(
             self,

@@ -141,6 +141,42 @@ class CreditCardExpenseRepository:
 
         return int(row["total_cents"])
 
+    def somar_faturas_futuras(
+            self,
+            credit_card_id: int,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> int:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(e.effective_amount_cents), 0) AS total_cents
+            FROM finance_credit_card_expenses e
+            INNER JOIN finance_credit_card_invoices i
+                ON i.id = e.invoice_id
+            WHERE e.credit_card_id = ?
+              AND (
+                    i.invoice_year > ?
+                    OR (
+                        i.invoice_year = ?
+                        AND i.invoice_month > ?
+                    )
+              )
+              AND e.status != 'cancelled'
+            """,
+            (
+                credit_card_id,
+                invoice_year,
+                invoice_year,
+                invoice_month,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        return int(row["total_cents"] or 0)
+
     def listar_lancamentos_por_fatura(
             self,
             credit_card_id: int,
@@ -177,6 +213,7 @@ class CreditCardExpenseRepository:
                     ELSE 1
                 END ASC,
                 e.installment_number DESC,
+                e.installment_total DESC,
                 e.effective_purchase_date ASC,
                 e.id ASC
             """,

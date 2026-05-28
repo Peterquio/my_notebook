@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout,
     QVBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView,
+    QGridLayout,
 )
 
 from modules.finance.services.importers.credit_card_import_service import (
@@ -20,18 +21,6 @@ from modules.finance.services.credit_card_detail_service import (
 
 from modules.finance.ui.dialogs.credit_card_import_preview_dialog import (
     CreditCardImportPreviewDialog,
-)
-
-from modules.finance.repositories.credit_card_expense_repository import (
-    CreditCardExpenseRepository,
-)
-
-from modules.finance.repositories.credit_card_invoice_repository import (
-    CreditCardInvoiceRepository,
-)
-
-from modules.finance.services.credit_card_invoice_service import (
-    CreditCardInvoiceService,
 )
 
 from modules.finance.services.finance_category_service import (
@@ -82,7 +71,7 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.categories = self.category_service.listar_categorias_ativas()
-        self.sort_mode = "categoria"
+        self.sort_mode = "parcelas"
 
         self.invoice_data = self._carregar_fatura_selecionada()
 
@@ -109,10 +98,6 @@ class CreditCardInvoicePage(QWidget):
 
         self.table = self._criar_tabela()
         layout.addWidget(self.table, 1)
-
-        layout.addLayout(
-            self._criar_footer()
-        )
 
     def _carregar_fatura_selecionada(self) -> dict:
         if (
@@ -188,35 +173,28 @@ class CreditCardInvoicePage(QWidget):
 
         return layout
 
-    def _criar_cards_resumo(self) -> QHBoxLayout:
-        layout = QHBoxLayout()
-        layout.setSpacing(14)
+    def _criar_cards_resumo(self) -> QGridLayout:
+        layout = QGridLayout()
+        layout.setSpacing(10)
 
-        total_fatura = self.detail_service._formatar_moeda(
-            self.invoice_data["total_fatura_cents"]
+        cards = self.detail_service.montar_cards_resumo_fatura(
+            credit_card=self.credit_card,
+            invoice_data=self.invoice_data,
         )
 
-        valor_a_pagar = self.detail_service._formatar_moeda(
-            self.invoice_data["valor_a_pagar_cents"]
-        )
+        for index, card_data in enumerate(cards):
+            row = index // 3
+            column = index % 3
 
-        cards = [
-            ("📅", "Vencimento", "10/04", "Data para pagamento"),
-            ("💳", "Valor Total", total_fatura, "Total da fatura"),
-            ("🧾", "Valor a Pagar", valor_a_pagar, "Após pagamentos e créditos"),
-            ("🕘", "Parcelamentos Futuros", "R$ 2.184,22", "Próximas parcelas"),
-            ("👛", "Limite Disponível", "R$ 6.945,48", "de R$ 12.000,00"),
-        ]
-
-        for icon, title, value, subtitle in cards:
             layout.addWidget(
                 self._criar_card_resumo(
-                    icon,
-                    title,
-                    value,
-                    subtitle,
+                    card_data["icon"],
+                    card_data["title"],
+                    card_data["value"],
+                    card_data["subtitle"],
                 ),
-                1,
+                row,
+                column,
             )
 
         return layout
@@ -229,7 +207,7 @@ class CreditCardInvoicePage(QWidget):
             subtitle: str,
     ) -> QFrame:
         card = QFrame()
-        card.setFixedHeight(86)
+        card.setMinimumHeight(68)
         card.setStyleSheet(
             """
             QFrame {
@@ -241,33 +219,37 @@ class CreditCardInvoicePage(QWidget):
         )
 
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
 
         icon_label = QLabel(icon)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFixedSize(42, 42)
+        icon_label.setFixedSize(34, 34)
         icon_label.setStyleSheet(
             """
-            background-color: #f3e8ff;
-            color: #6d28d9;
-            border-radius: 21px;
-            font-size: 20px;
+            QLabel {
+                background-color: #f3e8ff;
+                color: #6d28d9;
+                border: none;
+                border-radius: 17px;
+                font-size: 16px;
+            }
             """
         )
 
         textos = QVBoxLayout()
-        textos.setSpacing(2)
+        textos.setSpacing(1)
 
         title_label = QLabel(title)
         title_label.setStyleSheet(
-            "font-size: 12px; color: #64748b;"
+            "border: none; font-size: 11px; color: #64748b;"
         )
 
         value_label = QLabel(value)
         value_label.setStyleSheet(
             """
-            font-size: 20px;
+            border: none;
+            font-size: 17px;
             font-weight: bold;
             color: #0f172a;
             """
@@ -275,7 +257,7 @@ class CreditCardInvoicePage(QWidget):
 
         subtitle_label = QLabel(subtitle)
         subtitle_label.setStyleSheet(
-            "font-size: 11px; color: #64748b;"
+            "border: none; font-size: 10px; color: #64748b;"
         )
 
         textos.addWidget(title_label)
@@ -290,70 +272,56 @@ class CreditCardInvoicePage(QWidget):
 
     def _criar_filtros(self) -> QHBoxLayout:
         layout = QHBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
         busca = QLineEdit()
-        busca.setPlaceholderText("Buscar lançamentos...")
-        busca.setFixedWidth(230)
+        busca.setPlaceholderText("Buscar lançamento...")
+        busca.setFixedWidth(220)
 
         categorias = QComboBox()
-        categorias.addItems(
-            [
-                "Todas as categorias",
-                "Gastos Fixos",
-                "Assinatura",
-                "Lazer",
-                "Compras",
-            ]
-        )
-        categorias.setFixedWidth(160)
+        categorias.addItem("Todas as categorias", None)
 
-        tipos = QComboBox()
-        ordenar = QComboBox()
-        ordenar.addItems(
-            [
-                "Ordenar por categoria",
-                "Ordenar por data",
-                "Ordenar por ordem alfabética",
-                "Ordenar por valor",
-                "Ordenar por parcelas pagas",
-            ]
-        )
-        ordenar.setFixedWidth(220)
+        for categoria in self.categories:
+            categorias.addItem(
+                categoria["name"],
+                categoria["id"],
+            )
 
-        ordenar.currentIndexChanged.connect(
-            self._alterar_ordenacao
-        )
-        tipos.addItems(
-            [
-                "Todos",
-                "Somente parcelados",
-                "Somente à vista",
-            ]
-        )
-        tipos.setFixedWidth(150)
+        categorias.setFixedWidth(180)
 
-        importar = QPushButton("Importar")
-        importar.setFixedWidth(120)
+        #total_lancamentos = QLabel(
+        #    f"{self.invoice_data['total_lancamentos']} lançamentos"
+        #)
+        #total_lancamentos.setStyleSheet(
+        #    "font-size: 12px; color: #64748b;"
+        #)
 
+        importar = self._criar_botao_icone(
+            texto="⬆",
+            tooltip="Importar CSV Nubank",
+        )
         importar.clicked.connect(
             self._importar_csv
         )
 
-        importar_backup = QPushButton("Importar backup")
-        importar_backup.setFixedWidth(135)
+        importar_backup = self._criar_botao_icone(
+            texto="↺",
+            tooltip="Importar backup",
+        )
         importar_backup.clicked.connect(
             self._importar_dados_cartao
         )
 
-        exportar = QPushButton("⬇  Exportar")
-        exportar.setFixedWidth(105)
+        exportar = self._criar_botao_icone(
+            texto="⬇",
+            tooltip="Exportar dados",
+        )
         exportar.clicked.connect(
             self._exportar_dados_cartao
         )
 
         novo = QPushButton("+  Novo lançamento")
-        novo.setFixedWidth(150)
+        novo.setFixedWidth(155)
         novo.setStyleSheet(
             """
             QPushButton {
@@ -370,21 +338,64 @@ class CreditCardInvoicePage(QWidget):
             }
             """
         )
-
         novo.clicked.connect(
             self._abrir_dialog_novo_lancamento
         )
+
+        ordenar = QComboBox()
+        ordenar.addItems(
+            [
+                "Ordenar por categoria",
+                "Ordenar por data",
+                "Ordenar por ordem alfabética",
+                "Ordenar por valor",
+                "Ordenar por parcelas pagas",
+            ]
+        )
+        ordenar.setFixedWidth(210)
+        ordenar.currentIndexChanged.connect(
+            self._alterar_ordenacao
+        )
+
         layout.addWidget(busca)
         layout.addWidget(categorias)
-        layout.addWidget(tipos)
+        #layout.addWidget(total_lancamentos)
         layout.addStretch()
         layout.addWidget(importar)
         layout.addWidget(importar_backup)
         layout.addWidget(exportar)
-        layout.addWidget(novo)
         layout.addWidget(ordenar)
+        layout.addWidget(novo)
 
         return layout
+
+    def _criar_botao_icone(
+            self,
+            texto: str,
+            tooltip: str,
+    ) -> QPushButton:
+        botao = QPushButton(texto)
+        botao.setFixedSize(38, 36)
+        botao.setToolTip(tooltip)
+        botao.setStyleSheet(
+            """
+            QPushButton {
+                background-color: white;
+                border: 1px solid #dbe4f0;
+                border-radius: 10px;
+                color: #475569;
+                font-size: 15px;
+                font-weight: bold;
+            }
+
+            QPushButton:hover {
+                background-color: #f8fafc;
+                border-color: #cbd5e1;
+            }
+            """
+        )
+
+        return botao
 
     def _alterar_ordenacao(
             self,
@@ -432,6 +443,10 @@ class CreditCardInvoicePage(QWidget):
         table.setAlternatingRowColors(False)
 
         header = table.horizontalHeader()
+        header.setFixedHeight(28)
+        header_font = header.font()
+        header_font.setPointSize(max(header_font.pointSize() - 2, 8))
+        header.setFont(header_font)
         header.setSectionResizeMode(0, QHeaderView.Fixed)
         header.setSectionResizeMode(1, QHeaderView.Fixed)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
@@ -440,12 +455,12 @@ class CreditCardInvoicePage(QWidget):
         header.setSectionResizeMode(5, QHeaderView.Fixed)
         header.setSectionResizeMode(6, QHeaderView.Fixed)
 
-        table.setColumnWidth(0, 80)
-        table.setColumnWidth(1, 26)
+        table.setColumnWidth(0, 70)
+        table.setColumnWidth(1, 22)
         table.setColumnWidth(3, 120)
-        table.setColumnWidth(4, 170)
-        table.setColumnWidth(5, 150)
-        table.setColumnWidth(6, 150)
+        table.setColumnWidth(4, 105)
+        table.setColumnWidth(5, 105)
+        table.setColumnWidth(6, 135)
 
         rows = self._dados_mockados()
         table.setRowCount(len(rows))
@@ -517,10 +532,29 @@ class CreditCardInvoicePage(QWidget):
             "#6d28d9",
         )
 
+        is_last_installment = row.get(
+            "is_last_installment",
+            False,
+        )
+
+        row_background = QColor(226, 232, 240) if is_last_installment else None
+
         for col, value in enumerate(valores):
             item = QTableWidgetItem(value)
             item.setData(Qt.UserRole, row)
             item.setForeground(QColor("#334155"))
+
+            if row_background is not None:
+                item.setBackground(row_background)
+
+            if col == 5:
+                fonte = item.font()
+                tamanho_atual = fonte.pointSize()
+
+                if tamanho_atual > 0:
+                    fonte.setPointSize(max(tamanho_atual - 2, 8))
+
+                item.setFont(fonte)
 
             if col == 1:
                 item.setBackground(
@@ -860,20 +894,8 @@ class CreditCardInvoicePage(QWidget):
         self.table = nova_tabela
 
     def _reprocessar_faturas(self) -> None:
-        expense_repository = CreditCardExpenseRepository(
-            self.username
-        )
-
-        invoice_repository = CreditCardInvoiceRepository(
-            self.username
-        )
-
-        invoice_service = CreditCardInvoiceService()
-
-        total = invoice_service.reprocessar_faturas_cartao(
+        total = self.detail_service.reprocessar_faturas_cartao(
             credit_card=self.credit_card,
-            expense_repository=expense_repository,
-            invoice_repository=invoice_repository,
         )
 
         self.invoice_data = self._carregar_fatura_selecionada()
