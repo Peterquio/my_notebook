@@ -392,3 +392,133 @@ class CreditCardExpenseRepository:
         )
 
         self.conexao.commit()
+
+    def listar_grupos_parcelados(
+            self,
+            credit_card_id: int,
+    ) -> list[str]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT DISTINCT installment_group_id
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND installment_group_id IS NOT NULL
+              AND status != 'cancelled'
+            ORDER BY installment_group_id
+            """,
+            (credit_card_id,),
+        )
+
+        return [
+            row["installment_group_id"]
+            for row in cursor.fetchall()
+        ]
+
+    def listar_parcelas_grupo(
+            self,
+            installment_group_id: str,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                e.*,
+                i.invoice_year,
+                i.invoice_month
+            FROM finance_credit_card_expenses e
+            INNER JOIN finance_credit_card_invoices i
+                ON i.id = e.invoice_id
+            WHERE e.installment_group_id = ?
+              AND e.status != 'cancelled'
+            ORDER BY
+                e.installment_number ASC,
+                e.effective_purchase_date ASC,
+                e.id ASC
+            """,
+            (installment_group_id,),
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
+
+    def buscar_parcela_grupo(
+            self,
+            installment_group_id: str,
+            installment_number: int,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_expenses
+            WHERE installment_group_id = ?
+              AND installment_number = ?
+              AND status != 'cancelled'
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (
+                installment_group_id,
+                installment_number,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def atualizar_parcela(
+            self,
+            expense_id: int,
+            invoice_id: int,
+            effective_purchase_date: str,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                invoice_id = ?,
+                effective_purchase_date = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                invoice_id,
+                effective_purchase_date,
+                expense_id,
+            ),
+        )
+
+        self.conexao.commit()
+
+    def cancelar_projecoes_parcelamento_cartao(
+            self,
+            credit_card_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE credit_card_id = ?
+              AND source_type = 'projected_installment'
+              AND status != 'cancelled'
+            """,
+            (credit_card_id,),
+        )
+
+        self.conexao.commit()
