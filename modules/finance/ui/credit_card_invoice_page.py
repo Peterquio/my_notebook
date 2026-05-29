@@ -420,6 +420,16 @@ class CreditCardInvoicePage(QWidget):
 
     def _criar_tabela(self) -> QTableWidget:
         table = QTableWidget()
+        table.setStyleSheet(
+            """
+            QHeaderView::section {
+                font-size: 10px;
+                font-weight: bold;
+                padding-top: 4px;
+                padding-bottom: 4px;
+            }
+            """
+        )
         table.setColumnCount(7)
         table.setHorizontalHeaderLabels(
             [

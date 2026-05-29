@@ -284,4 +284,119 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_invoice_adjustments (
     FOREIGN KEY (invoice_id)
         REFERENCES finance_credit_card_invoices(id)
 );
+
+CREATE TABLE IF NOT EXISTS finance_balance_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    name TEXT NOT NULL,
+    account_type TEXT NOT NULL DEFAULT 'bank',
+
+    include_in_global_balance INTEGER NOT NULL DEFAULT 1,
+    is_investment INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS finance_balance_cycles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    name TEXT NOT NULL,
+
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+
+    opening_balance_source TEXT NOT NULL DEFAULT 'manual',
+
+    is_active INTEGER NOT NULL DEFAULT 1,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS finance_balance_cycle_account_openings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    cycle_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+
+    opening_balance_cents INTEGER NOT NULL DEFAULT 0,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(cycle_id, account_id),
+
+    FOREIGN KEY (cycle_id)
+        REFERENCES finance_balance_cycles(id),
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    cycle_id INTEGER NOT NULL,
+    account_id INTEGER,
+
+    description TEXT NOT NULL,
+
+    expected_amount_cents INTEGER NOT NULL DEFAULT 0,
+    actual_amount_cents INTEGER,
+
+    expected_date TEXT NOT NULL,
+    received_date TEXT,
+
+    status TEXT NOT NULL DEFAULT 'expected',
+
+    is_recurring INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (cycle_id)
+        REFERENCES finance_balance_cycles(id),
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_balance_commitments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    cycle_id INTEGER NOT NULL,
+
+    description TEXT NOT NULL,
+
+    expected_amount_cents INTEGER NOT NULL DEFAULT 0,
+    actual_amount_cents INTEGER,
+
+    due_date TEXT NOT NULL,
+    paid_date TEXT,
+
+    payment_type TEXT NOT NULL DEFAULT 'bank_account',
+
+    account_id INTEGER,
+    credit_card_id INTEGER,
+
+    status TEXT NOT NULL DEFAULT 'expected',
+
+    is_recurring INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (cycle_id)
+        REFERENCES finance_balance_cycles(id),
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id),
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id)
+);
 """

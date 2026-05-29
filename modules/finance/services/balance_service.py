@@ -1,0 +1,404 @@
+from datetime import date
+from dateutil.relativedelta import relativedelta
+from modules.finance.repositories.balance_repository import BalanceRepository
+from modules.finance.repositories.balance_account_repository import BalanceAccountRepository
+
+class BalanceService:
+    def __init__(self, username: str) -> None:
+        self.repository = BalanceRepository(username)
+        self.account_repository = BalanceAccountRepository(username)
+
+    def calcular_saldo_inicial_global(
+            self,
+            cycle_id: int,
+    ) -> int:
+        saldos_iniciais = self.account_repository.listar_saldos_iniciais_ciclo(cycle_id)
+
+        total_cents = 0
+
+        for saldo in saldos_iniciais:
+            if saldo["include_in_global_balance"] != 1:
+                continue
+
+            if saldo["is_investment"] == 1:
+                continue
+
+            total_cents += saldo["opening_balance_cents"]
+
+        return total_cents
+
+    def somar_receitas_recebidas(
+            self,
+            cycle_id: int,
+    ) -> int:
+        total = 0
+
+        receitas = self.repository.listar_receitas_ciclo(cycle_id)
+
+        for receita in receitas:
+            if receita["status"] != "received":
+                continue
+
+            valor = (
+                receita["actual_amount_cents"]
+                if receita["actual_amount_cents"] is not None
+                else receita["expected_amount_cents"]
+            )
+
+            total += valor
+
+        return total
+
+    def somar_receitas_previstas(
+            self,
+            cycle_id: int,
+    ) -> int:
+        total = 0
+
+        receitas = self.repository.listar_receitas_ciclo(cycle_id)
+
+        for receita in receitas:
+            if receita["status"] != "expected":
+                continue
+
+            total += receita["expected_amount_cents"]
+
+        return total
+
+    def somar_compromissos_pagos(
+            self,
+            cycle_id: int,
+    ) -> int:
+        total = 0
+
+        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+
+        for compromisso in compromissos:
+            if compromisso["status"] != "paid":
+                continue
+
+            valor = (
+                compromisso["actual_amount_cents"]
+                if compromisso["actual_amount_cents"] is not None
+                else compromisso["expected_amount_cents"]
+            )
+
+            total += valor
+
+        return total
+
+    def somar_compromissos_previstos(
+            self,
+            cycle_id: int,
+    ) -> int:
+        total = 0
+
+        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+
+        for compromisso in compromissos:
+            if compromisso["status"] != "expected":
+                continue
+
+            total += compromisso["expected_amount_cents"]
+
+        return total
+
+    def obter_resumo_ciclo(
+            self,
+            cycle_id: int,
+    ) -> dict:
+
+        saldo_inicial = self.calcular_saldo_inicial_global(cycle_id)
+
+        receitas_recebidas = self.somar_receitas_recebidas(cycle_id)
+
+        receitas_previstas = self.somar_receitas_previstas(cycle_id)
+
+        compromissos_pagos = self.somar_compromissos_pagos(cycle_id)
+
+        compromissos_previstos = self.somar_compromissos_previstos(cycle_id)
+
+        saldo_atual = (
+            saldo_inicial
+            + receitas_recebidas
+            - compromissos_pagos
+        )
+
+        saldo_previsto = (
+            saldo_atual
+            + receitas_previstas
+            - compromissos_previstos
+        )
+
+        return {
+            "cycle_id": cycle_id,
+
+            "saldo_inicial_cents": saldo_inicial,
+
+            "receitas_recebidas_cents": receitas_recebidas,
+            "receitas_previstas_cents": receitas_previstas,
+
+            "compromissos_pagos_cents": compromissos_pagos,
+            "compromissos_previstos_cents": compromissos_previstos,
+
+            "saldo_atual_cents": saldo_atual,
+            "saldo_previsto_cents": saldo_previsto,
+        }
+
+    def receber_receita(
+            self,
+            receita_id: int,
+            valor_real_cents: int,
+            received_date: str,
+    ) -> None:
+        self.repository.confirmar_receita(
+            receita_id=receita_id,
+            valor_real_cents=valor_real_cents,
+            received_date=received_date,
+        )
+
+    def reabrir_receita(
+            self,
+            receita_id: int,
+    ) -> None:
+        self.repository.reabrir_receita(
+            receita_id=receita_id,
+        )
+
+    def pagar_compromisso(
+            self,
+            compromisso_id: int,
+            valor_real_cents: int,
+            paid_date: str,
+    ) -> None:
+        self.repository.confirmar_compromisso(
+            compromisso_id=compromisso_id,
+            valor_real_cents=valor_real_cents,
+            paid_date=paid_date,
+        )
+
+    def reabrir_compromisso(
+            self,
+            compromisso_id: int,
+    ) -> None:
+        self.repository.reabrir_compromisso(
+            compromisso_id=compromisso_id,
+        )
+
+    def _adicionar_um_mes(
+            self,
+            data_texto: str,
+    ) -> str:
+        data = date.fromisoformat(data_texto)
+        nova_data = data + relativedelta(months=1)
+        return nova_data.isoformat()
+
+    def calcular_saldo_atual_conta(
+            self,
+            cycle_id: int,
+            account_id: int,
+    ) -> int:
+        saldos = self.account_repository.listar_saldos_iniciais_ciclo(cycle_id)
+
+        saldo_inicial = 0
+
+        for saldo in saldos:
+            if saldo["account_id"] == account_id:
+                saldo_inicial = saldo["opening_balance_cents"]
+                break
+
+        receitas_recebidas = 0
+
+        for receita in self.repository.listar_receitas_ciclo(cycle_id):
+            if receita["account_id"] != account_id:
+                continue
+
+            if receita["status"] != "received":
+                continue
+
+            valor = (
+                receita["actual_amount_cents"]
+                if receita["actual_amount_cents"] is not None
+                else receita["expected_amount_cents"]
+            )
+
+            receitas_recebidas += valor
+
+        compromissos_pagos = 0
+
+        for compromisso in self.repository.listar_compromissos_ciclo(cycle_id):
+            if compromisso["account_id"] != account_id:
+                continue
+
+            if compromisso["status"] != "paid":
+                continue
+
+            valor = (
+                compromisso["actual_amount_cents"]
+                if compromisso["actual_amount_cents"] is not None
+                else compromisso["expected_amount_cents"]
+            )
+
+            compromissos_pagos += valor
+
+        return saldo_inicial + receitas_recebidas - compromissos_pagos
+
+    def gerar_proximo_ciclo_real(
+            self,
+            cycle_id: int,
+    ) -> int:
+        ciclo_atual = self.repository.buscar_ciclo_por_id(cycle_id)
+
+        if ciclo_atual is None:
+            raise ValueError(f"Ciclo não encontrado: {cycle_id}")
+
+        nova_data_inicio = self._adicionar_um_mes(ciclo_atual["start_date"])
+        nova_data_fim = self._adicionar_um_mes(ciclo_atual["end_date"])
+
+        novo_nome = f"Ciclo {nova_data_inicio} até {nova_data_fim}"
+
+        novo_cycle_id = self.repository.criar_ciclo(
+            name=novo_nome,
+            start_date=nova_data_inicio,
+            end_date=nova_data_fim,
+            opening_balance_source="previous_cycle_real",
+        )
+
+        saldos_anteriores = self.account_repository.listar_saldos_iniciais_ciclo(cycle_id)
+
+        for saldo in saldos_anteriores:
+            account_id = saldo["account_id"]
+
+            saldo_real_conta = self.calcular_saldo_atual_conta(
+                cycle_id=cycle_id,
+                account_id=account_id,
+            )
+
+            self.account_repository.definir_saldo_inicial_conta(
+                cycle_id=novo_cycle_id,
+                account_id=account_id,
+                opening_balance_cents=saldo_real_conta,
+            )
+
+        receitas = self.repository.listar_receitas_ciclo(cycle_id)
+
+        for receita in receitas:
+            if receita["is_recurring"] != 1:
+                continue
+
+            self.repository.criar_receita(
+                cycle_id=novo_cycle_id,
+                account_id=receita["account_id"],
+                description=receita["description"],
+                expected_amount_cents=receita["expected_amount_cents"],
+                expected_date=self._adicionar_um_mes(receita["expected_date"]),
+                is_recurring=True,
+                notes=receita["notes"],
+            )
+
+        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+
+        for compromisso in compromissos:
+            if compromisso["is_recurring"] != 1:
+                continue
+
+            self.repository.criar_compromisso(
+                cycle_id=novo_cycle_id,
+                description=compromisso["description"],
+                expected_amount_cents=compromisso["expected_amount_cents"],
+                due_date=self._adicionar_um_mes(compromisso["due_date"]),
+                payment_type=compromisso["payment_type"],
+                account_id=compromisso["account_id"],
+                credit_card_id=compromisso["credit_card_id"],
+                is_recurring=True,
+                notes=compromisso["notes"],
+            )
+
+        return novo_cycle_id
+
+    def obter_resumo_dashboard(
+            self,
+            cycle_id: int,
+    ) -> dict:
+        resumo = self.obter_resumo_ciclo(cycle_id)
+
+        proximos_vencimentos = 0
+
+        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+
+        for compromisso in compromissos:
+            if compromisso["status"] != "expected":
+                continue
+
+            proximos_vencimentos += 1
+
+        return {
+            "cycle_id": cycle_id,
+
+            "saldo_atual_cents": resumo["saldo_atual_cents"],
+            "saldo_previsto_cents": resumo["saldo_previsto_cents"],
+
+            "receitas_previstas_cents": resumo["receitas_previstas_cents"],
+            "compromissos_previstos_cents": resumo["compromissos_previstos_cents"],
+
+            "proximos_vencimentos": proximos_vencimentos,
+        }
+
+    def calcular_saldo_previsto_conta(
+            self,
+            cycle_id: int,
+            account_id: int,
+    ) -> int:
+        saldo_atual = self.calcular_saldo_atual_conta(
+            cycle_id=cycle_id,
+            account_id=account_id,
+        )
+
+        receitas_previstas = 0
+
+        for receita in self.repository.listar_receitas_ciclo(cycle_id):
+            if receita["account_id"] != account_id:
+                continue
+
+            if receita["status"] != "expected":
+                continue
+
+            receitas_previstas += receita["expected_amount_cents"]
+
+        compromissos_previstos = 0
+
+        for compromisso in self.repository.listar_compromissos_ciclo(cycle_id):
+            if compromisso["account_id"] != account_id:
+                continue
+
+            if compromisso["status"] != "expected":
+                continue
+
+            compromissos_previstos += compromisso["expected_amount_cents"]
+
+        return saldo_atual + receitas_previstas - compromissos_previstos
+
+    def obter_resumo_conta_dashboard(
+            self,
+            cycle_id: int,
+            account_id: int,
+    ) -> dict:
+        saldo_atual = self.calcular_saldo_atual_conta(
+            cycle_id=cycle_id,
+            account_id=account_id,
+        )
+
+        saldo_previsto = self.calcular_saldo_previsto_conta(
+            cycle_id=cycle_id,
+            account_id=account_id,
+        )
+
+        conta = self.account_repository.buscar_conta_por_id(account_id)
+
+        return {
+            "cycle_id": cycle_id,
+            "account_id": account_id,
+            "account_name": conta["name"] if conta else f"Conta #{account_id}",
+            "saldo_atual_cents": saldo_atual,
+            "saldo_previsto_cents": saldo_previsto,
+        }
