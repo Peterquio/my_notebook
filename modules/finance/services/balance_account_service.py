@@ -29,3 +29,27 @@ class BalanceAccountService:
             account_id: int,
     ) -> dict | None:
         return self.repository.buscar_conta_por_id(account_id)
+
+    def atualizar_conta(
+            self,
+            account_id: int,
+            name: str,
+            account_type: str,
+            include_in_global_balance: bool,
+            is_investment: bool,
+    ) -> None:
+        self.repository.atualizar_conta(
+            account_id=account_id,
+            name=name,
+            account_type=account_type,
+            include_in_global_balance=include_in_global_balance,
+            is_investment=is_investment,
+        )
+
+    def desativar_conta(
+            self,
+            account_id: int,
+    ) -> None:
+        self.repository.desativar_conta(
+            account_id=account_id,
+        )

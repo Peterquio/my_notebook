@@ -147,3 +147,54 @@ class BalanceAccountRepository:
         )
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def atualizar_conta(
+            self,
+            account_id: int,
+            name: str,
+            account_type: str,
+            include_in_global_balance: bool,
+            is_investment: bool,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_balance_accounts
+            SET
+                name = ?,
+                account_type = ?,
+                include_in_global_balance = ?,
+                is_investment = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                name,
+                account_type,
+                int(include_in_global_balance),
+                int(is_investment),
+                account_id,
+            ),
+        )
+
+        self.conexao.commit()
+
+    def desativar_conta(
+            self,
+            account_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_balance_accounts
+            SET
+                is_active = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (account_id,),
+        )
+
+        self.conexao.commit()

@@ -17,6 +17,22 @@ from modules.finance.ui.credit_card_detail_window import (
     CreditCardDetailWindow,
 )
 
+from modules.finance.ui.balance_detail_window import (
+    BalanceDetailWindow,
+)
+
+from modules.finance.services.balance_service import (
+    BalanceService,
+)
+
+from modules.finance.ui.dialogs.finance_welcome_dialog import (
+    FinanceWelcomeDialog,
+)
+
+from modules.finance.ui.dialogs.balance_initial_cycle_dialog import (
+    BalanceInitialCycleDialog,
+)
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -51,6 +67,12 @@ class FinanceHome(BaseScreen):
             self.username
         ).inicializar_banco_usuario()
 
+        self.balance_service = BalanceService(
+            self.username
+        )
+
+        self._garantir_onboarding_financeiro()
+
         self.dashboard_layout_service = DashboardLayoutService(
             self.username
         )
@@ -62,6 +84,34 @@ class FinanceHome(BaseScreen):
         self.card_catalog_controller = None
 
         self._criar_widgets()
+
+    def _garantir_onboarding_financeiro(self) -> None:
+        ciclos = self.balance_service.listar_ciclos()
+
+        if ciclos:
+            return
+
+        welcome_dialog = FinanceWelcomeDialog(
+            parent=self,
+        )
+
+        if welcome_dialog.exec() != FinanceWelcomeDialog.Accepted:
+            return
+
+        cycle_dialog = BalanceInitialCycleDialog(
+            parent=self,
+        )
+
+        if cycle_dialog.exec() != BalanceInitialCycleDialog.Accepted:
+            return
+
+        dados = cycle_dialog.obter_dados()
+
+        self.balance_service.criar_ciclo(
+            name=dados["name"],
+            start_date=dados["start_date"],
+            end_date=dados["end_date"],
+        )
 
     def _criar_widgets(self) -> None:
         self.dashboard_area = EditableDashboardArea(
@@ -143,6 +193,11 @@ class FinanceHome(BaseScreen):
                     slot
                 )
 
+            if item["card_type"] == "balance":
+                self._conectar_abertura_card_saldo(
+                    slot
+                )
+
             slot.delete_requested.connect(
                 self.dashboard_card_service.remover_ou_desativar_card
             )
@@ -214,6 +269,47 @@ class FinanceHome(BaseScreen):
             )
         )
 
+    def _abrir_detalhes_saldo(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        self.balance_detail_page = BalanceDetailWindow(
+            username=self.username,
+            parent=self.window(),
+        )
+
+        self.balance_detail_page.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.balance_detail_page.data_changed.connect(
+            self._recarregar_dashboard
+        )
+
+        self.window().entrar_modo_foco(
+            self.balance_detail_page
+        )
+
+    def _conectar_abertura_card_saldo(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot: self._abrir_detalhes_saldo(
+                current_slot
+            )
+        )
+
     def _on_dashboard_slot_created(
             self,
             slot,
@@ -225,16 +321,24 @@ class FinanceHome(BaseScreen):
             None,
         )
 
-        if card_type != "credit_card":
+        if card_type == "credit_card":
+            self._conectar_abertura_card_cartao(
+                slot
+            )
             return
 
-        self._conectar_abertura_card_cartao(
-            slot
-        )
+        if card_type == "balance":
+            self._conectar_abertura_card_saldo(
+                slot
+            )
+            return
 
     def _voltar_para_dashboard_financeiro(self) -> None:
         self.window().sair_modo_foco()
 
         self.credit_card_detail_page = None
+
+        if hasattr(self, "balance_detail_page"):
+            self.balance_detail_page = None
 
         self._recarregar_dashboard()

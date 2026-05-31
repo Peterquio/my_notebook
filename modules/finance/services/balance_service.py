@@ -27,15 +27,30 @@ class BalanceService:
 
         return total_cents
 
-    def somar_receitas_recebidas(
-            self,
-            cycle_id: int,
-    ) -> int:
+    def _obter_ids_contas_saldo_global(self, cycle_id: int) -> set[int]:
+        saldos_iniciais = self.account_repository.listar_saldos_iniciais_ciclo(cycle_id)
+
+        account_ids = set()
+
+        for saldo in saldos_iniciais:
+            if saldo["include_in_global_balance"] != 1:
+                continue
+
+            if saldo["is_investment"] == 1:
+                continue
+
+            account_ids.add(saldo["account_id"])
+
+        return account_ids
+
+    def somar_receitas_recebidas(self, cycle_id: int) -> int:
+        account_ids = self._obter_ids_contas_saldo_global(cycle_id)
         total = 0
 
-        receitas = self.repository.listar_receitas_ciclo(cycle_id)
+        for receita in self.repository.listar_receitas_ciclo(cycle_id):
+            if receita["account_id"] not in account_ids:
+                continue
 
-        for receita in receitas:
             if receita["status"] != "received":
                 continue
 
@@ -49,15 +64,14 @@ class BalanceService:
 
         return total
 
-    def somar_receitas_previstas(
-            self,
-            cycle_id: int,
-    ) -> int:
+    def somar_receitas_previstas(self, cycle_id: int) -> int:
+        account_ids = self._obter_ids_contas_saldo_global(cycle_id)
         total = 0
 
-        receitas = self.repository.listar_receitas_ciclo(cycle_id)
+        for receita in self.repository.listar_receitas_ciclo(cycle_id):
+            if receita["account_id"] not in account_ids:
+                continue
 
-        for receita in receitas:
             if receita["status"] != "expected":
                 continue
 
@@ -65,15 +79,14 @@ class BalanceService:
 
         return total
 
-    def somar_compromissos_pagos(
-            self,
-            cycle_id: int,
-    ) -> int:
+    def somar_compromissos_pagos(self, cycle_id: int) -> int:
+        account_ids = self._obter_ids_contas_saldo_global(cycle_id)
         total = 0
 
-        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+        for compromisso in self.repository.listar_compromissos_ciclo(cycle_id):
+            if compromisso["account_id"] not in account_ids:
+                continue
 
-        for compromisso in compromissos:
             if compromisso["status"] != "paid":
                 continue
 
@@ -87,22 +100,21 @@ class BalanceService:
 
         return total
 
-    def somar_compromissos_previstos(
-            self,
-            cycle_id: int,
-    ) -> int:
+    def somar_compromissos_previstos(self, cycle_id: int) -> int:
+        account_ids = self._obter_ids_contas_saldo_global(cycle_id)
         total = 0
 
-        compromissos = self.repository.listar_compromissos_ciclo(cycle_id)
+        for compromisso in self.repository.listar_compromissos_ciclo(cycle_id):
+            if compromisso["account_id"] not in account_ids:
+                continue
 
-        for compromisso in compromissos:
             if compromisso["status"] != "expected":
                 continue
 
             total += compromisso["expected_amount_cents"]
 
         return total
-
+    
     def obter_resumo_ciclo(
             self,
             cycle_id: int,
@@ -144,6 +156,37 @@ class BalanceService:
             "saldo_atual_cents": saldo_atual,
             "saldo_previsto_cents": saldo_previsto,
         }
+
+    def criar_receita(
+            self,
+            cycle_id: int,
+            account_id: int,
+            description: str,
+            expected_amount_cents: int,
+            expected_date: str,
+            is_recurring: bool = False,
+            notes: str | None = None,
+    ) -> int:
+        if account_id is None:
+            raise ValueError("A receita precisa estar vinculada a uma conta.")
+
+        conta = self.account_repository.buscar_conta_por_id(account_id)
+
+        if conta is None:
+            raise ValueError(f"Conta não encontrada: {account_id}")
+
+        if conta["is_active"] != 1:
+            raise ValueError("Não é possível lançar receita em uma conta inativa.")
+
+        return self.repository.criar_receita(
+            cycle_id=cycle_id,
+            account_id=account_id,
+            description=description,
+            expected_amount_cents=expected_amount_cents,
+            expected_date=expected_date,
+            is_recurring=is_recurring,
+            notes=notes,
+        )
 
     def receber_receita(
             self,
@@ -402,3 +445,184 @@ class BalanceService:
             "saldo_atual_cents": saldo_atual,
             "saldo_previsto_cents": saldo_previsto,
         }
+
+    def atualizar_receita(
+            self,
+            receita_id: int,
+            account_id: int,
+            description: str,
+            expected_amount_cents: int,
+            expected_date: str,
+            is_recurring: bool = False,
+            notes: str | None = None,
+    ) -> None:
+
+        conta = self.account_repository.buscar_conta_por_id(
+            account_id
+        )
+
+        if conta is None:
+            raise ValueError("Conta não encontrada.")
+
+        if conta["is_active"] != 1:
+            raise ValueError("Conta inativa.")
+
+        self.repository.atualizar_receita(
+            receita_id=receita_id,
+            account_id=account_id,
+            description=description,
+            expected_amount_cents=expected_amount_cents,
+            expected_date=expected_date,
+            is_recurring=is_recurring,
+            notes=notes,
+        )
+
+    def excluir_receita(
+            self,
+            receita_id: int,
+    ) -> None:
+        self.repository.excluir_receita(
+            receita_id
+        )
+
+    def listar_ciclos(self) -> list[dict]:
+        return self.repository.listar_ciclos_ativos()
+
+    def obter_ciclo_padrao(self) -> dict | None:
+        ciclos = self.listar_ciclos()
+
+        if not ciclos:
+            return None
+
+        return ciclos[0]
+
+    def listar_receitas_ciclo(
+            self,
+            cycle_id: int,
+    ) -> list[dict]:
+        return self.repository.listar_receitas_ciclo(
+            cycle_id
+        )
+
+    def listar_compromissos_ciclo(
+            self,
+            cycle_id: int,
+    ) -> list[dict]:
+        return self.repository.listar_compromissos_ciclo(
+            cycle_id
+        )
+
+    def atualizar_compromisso(
+            self,
+            compromisso_id: int,
+            description: str,
+            expected_amount_cents: int,
+            due_date: str,
+            payment_type: str,
+            account_id: int | None,
+            credit_card_id: int | None,
+            is_recurring: bool = False,
+            notes: str | None = None,
+    ) -> None:
+
+        if payment_type == "bank_account":
+            conta = self.account_repository.buscar_conta_por_id(
+                account_id
+            )
+
+            if conta is None:
+                raise ValueError(
+                    "Conta não encontrada."
+                )
+
+            if conta["is_active"] != 1:
+                raise ValueError(
+                    "Conta inativa."
+                )
+
+        self.repository.atualizar_compromisso(
+            compromisso_id=compromisso_id,
+            description=description,
+            expected_amount_cents=expected_amount_cents,
+            due_date=due_date,
+            payment_type=payment_type,
+            account_id=account_id,
+            credit_card_id=credit_card_id,
+            is_recurring=is_recurring,
+            notes=notes,
+        )
+
+    def excluir_compromisso(
+            self,
+            compromisso_id: int,
+    ) -> None:
+        self.repository.excluir_compromisso(
+            compromisso_id
+        )
+
+    def criar_compromisso(
+            self,
+            cycle_id: int,
+            description: str,
+            expected_amount_cents: int,
+            due_date: str,
+            payment_type: str,
+            account_id: int | None = None,
+            credit_card_id: int | None = None,
+            is_recurring: bool = False,
+            notes: str | None = None,
+    ) -> int:
+
+        if payment_type == "bank_account":
+            if account_id is None:
+                raise ValueError(
+                    "Compromissos bancários precisam de uma conta."
+                )
+
+            conta = self.account_repository.buscar_conta_por_id(
+                account_id
+            )
+
+            if conta is None:
+                raise ValueError(
+                    "Conta não encontrada."
+                )
+
+            if conta["is_active"] != 1:
+                raise ValueError(
+                    "Conta inativa."
+                )
+
+        return self.repository.criar_compromisso(
+            cycle_id=cycle_id,
+            description=description,
+            expected_amount_cents=expected_amount_cents,
+            due_date=due_date,
+            payment_type=payment_type,
+            account_id=account_id,
+            credit_card_id=credit_card_id,
+            is_recurring=is_recurring,
+            notes=notes,
+        )
+
+    def criar_ciclo(
+            self,
+            name: str,
+            start_date: str,
+            end_date: str,
+            opening_balance_source: str = "manual",
+    ) -> int:
+        return self.repository.criar_ciclo(
+            name=name,
+            start_date=start_date,
+            end_date=end_date,
+            opening_balance_source=opening_balance_source,
+        )
+
+    def obter_resumo_ciclo(
+            self,
+            cycle_id: int,
+    ) -> dict:
+        return self.repository.obter_resumo_ciclo(
+            cycle_id
+        )
