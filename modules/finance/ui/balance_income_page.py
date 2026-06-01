@@ -295,8 +295,13 @@ class BalanceIncomePage(QWidget):
 
         dados = dialog.obter_dados()
 
-        self.balance_service.atualizar_receita(
-            receita_id=receita["id"],
+        dados.pop(
+            "opening_balance_cents",
+            None,
+        )
+
+        self.account_service.atualizar_conta(
+            account_id=conta["id"],
             **dados,
         )
 

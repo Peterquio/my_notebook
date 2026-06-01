@@ -291,6 +291,12 @@ CREATE TABLE IF NOT EXISTS finance_balance_accounts (
     name TEXT NOT NULL,
     account_type TEXT NOT NULL DEFAULT 'bank',
 
+    institution_name TEXT,
+    bank_preset_key TEXT,
+    agency TEXT,
+    account_number TEXT,
+    account_kind TEXT,
+
     include_in_global_balance INTEGER NOT NULL DEFAULT 1,
     is_investment INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,

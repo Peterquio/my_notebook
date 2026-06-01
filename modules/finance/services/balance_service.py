@@ -114,7 +114,7 @@ class BalanceService:
             total += compromisso["expected_amount_cents"]
 
         return total
-    
+
     def obter_resumo_ciclo(
             self,
             cycle_id: int,
@@ -123,36 +123,30 @@ class BalanceService:
         saldo_inicial = self.calcular_saldo_inicial_global(cycle_id)
 
         receitas_recebidas = self.somar_receitas_recebidas(cycle_id)
-
         receitas_previstas = self.somar_receitas_previstas(cycle_id)
 
         compromissos_pagos = self.somar_compromissos_pagos(cycle_id)
-
         compromissos_previstos = self.somar_compromissos_previstos(cycle_id)
 
         saldo_atual = (
-            saldo_inicial
-            + receitas_recebidas
-            - compromissos_pagos
+                saldo_inicial
+                + receitas_recebidas
+                - compromissos_pagos
         )
 
         saldo_previsto = (
-            saldo_atual
-            + receitas_previstas
-            - compromissos_previstos
+                saldo_atual
+                + receitas_previstas
+                - compromissos_previstos
         )
 
         return {
             "cycle_id": cycle_id,
-
             "saldo_inicial_cents": saldo_inicial,
-
             "receitas_recebidas_cents": receitas_recebidas,
             "receitas_previstas_cents": receitas_previstas,
-
             "compromissos_pagos_cents": compromissos_pagos,
             "compromissos_previstos_cents": compromissos_previstos,
-
             "saldo_atual_cents": saldo_atual,
             "saldo_previsto_cents": saldo_previsto,
         }
@@ -617,12 +611,4 @@ class BalanceService:
             start_date=start_date,
             end_date=end_date,
             opening_balance_source=opening_balance_source,
-        )
-
-    def obter_resumo_ciclo(
-            self,
-            cycle_id: int,
-    ) -> dict:
-        return self.repository.obter_resumo_ciclo(
-            cycle_id
         )

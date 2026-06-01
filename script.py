@@ -1,63 +1,59 @@
+import sqlite3
+
 from modules.finance.services.balance_service import BalanceService
-from modules.finance.services.balance_account_service import BalanceAccountService
 
-username = "default"
+DB_PATH = r"D:\Dev\my_notebook\user_data\users\default.db"
 
-balance_service = BalanceService(username)
-account_service = BalanceAccountService(username)
+conn = sqlite3.connect(DB_PATH)
+conn.row_factory = sqlite3.Row
+cursor = conn.cursor()
 
-account_id = account_service.criar_conta(
-    name="Conta Teste Compromisso",
-    account_type="bank",
-    include_in_global_balance=True,
-    is_investment=False,
-)
+print("=== CICLOS ===")
+cursor.execute("""
+    SELECT id, name, start_date, end_date
+    FROM finance_balance_cycles
+    WHERE is_active = 1
+    ORDER BY start_date DESC
+""")
+ciclos = [dict(row) for row in cursor.fetchall()]
 
-cycle_id = balance_service.repository.criar_ciclo(
-    name="Teste Compromisso",
-    start_date="2026-06-11",
-    end_date="2026-07-10",
-)
+for ciclo in ciclos:
+    print(ciclo)
 
-compromisso_id = balance_service.repository.criar_compromisso(
-    cycle_id=cycle_id,
-    description="Aluguel",
-    expected_amount_cents=120000,
-    due_date="2026-06-15",
-    payment_type="bank_account",
-    account_id=account_id,
-)
+if not ciclos:
+    print("Nenhum ciclo.")
+    raise SystemExit
 
-print("Compromisso criado:", compromisso_id)
+cycle_id = ciclos[0]["id"]
 
-balance_service.atualizar_compromisso(
-    compromisso_id=compromisso_id,
-    description="Aluguel Atualizado",
-    expected_amount_cents=130000,
-    due_date="2026-06-15",
-    payment_type="bank_account",
-    account_id=account_id,
-    credit_card_id=None,
-)
+print("\n=== CONTAS ===")
+cursor.execute("""
+    SELECT *
+    FROM finance_balance_accounts
+    WHERE is_active = 1
+    ORDER BY id
+""")
+for row in cursor.fetchall():
+    print(dict(row))
 
-print("Compromisso atualizado.")
+print("\n=== SALDOS INICIAIS DO CICLO ===")
+cursor.execute("""
+    SELECT
+        o.*,
+        a.name AS account_name
+    FROM finance_balance_cycle_account_openings o
+    JOIN finance_balance_accounts a
+        ON a.id = o.account_id
+    WHERE o.cycle_id = ?
+""", (cycle_id,))
+for row in cursor.fetchall():
+    print(dict(row))
 
-balance_service.pagar_compromisso(
-    compromisso_id=compromisso_id,
-    valor_real_cents=130000,
-    paid_date="2026-06-15",
-)
+conn.close()
 
-print("Compromisso pago.")
+print("\n=== RESUMO PELO BALANCE SERVICE ===")
+service = BalanceService("default")
+resumo = service.obter_resumo_ciclo(cycle_id)
 
-balance_service.reabrir_compromisso(
-    compromisso_id=compromisso_id,
-)
-
-print("Compromisso reaberto.")
-
-balance_service.excluir_compromisso(
-    compromisso_id=compromisso_id,
-)
-
-print("Compromisso excluído.")
+for chave, valor in resumo.items():
+    print(chave, valor)
