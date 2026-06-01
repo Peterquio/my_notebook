@@ -39,6 +39,10 @@ from modules.finance.ui.dialogs.credit_card_previous_payment_dialog import (
     CreditCardPreviousPaymentDialog,
 )
 
+from modules.finance.services.credit_card_balance_sync_service import (
+    CreditCardBalanceSyncService,
+)
+
 
 class CreditCardInvoicePage(QWidget):
     back_requested = Signal()
@@ -61,6 +65,12 @@ class CreditCardInvoicePage(QWidget):
 
         self.import_service = CreditCardImportService(self.username)
         self.detail_service = CreditCardDetailService(username=self.username)
+
+        self.balance_sync_service = (
+            CreditCardBalanceSyncService(
+                self.username
+            )
+        )
 
         self.portable_data_service = CreditCardPortableDataService(
             self.username
@@ -793,6 +803,8 @@ class CreditCardInvoicePage(QWidget):
 
         self.invoice_data = self._carregar_fatura_selecionada()
 
+        self._sincronizar_fatura_com_saldo()
+
         self._recarregar_tabela()
         self.data_changed.emit()
 
@@ -887,8 +899,25 @@ class CreditCardInvoicePage(QWidget):
 
         self.invoice_data = self._carregar_fatura_selecionada()
 
+        self._sincronizar_fatura_com_saldo()
+
         self._recarregar_tabela()
         self.data_changed.emit()
+
+    def _sincronizar_fatura_com_saldo(self) -> None:
+        try:
+            self.balance_sync_service.sincronizar_fatura_com_saldo(
+                credit_card_id=self.credit_card["id"],
+                invoice_year=self.invoice_data["invoice_year"],
+                invoice_month=self.invoice_data["invoice_month"],
+            )
+
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao sincronizar com Saldo",
+                str(erro),
+            )
 
     def _recarregar_tabela(self) -> None:
         nova_tabela = self._criar_tabela()
@@ -909,6 +938,8 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.invoice_data = self._carregar_fatura_selecionada()
+
+        self._sincronizar_fatura_com_saldo()
 
         self._recarregar_tabela()
 
@@ -999,6 +1030,8 @@ class CreditCardInvoicePage(QWidget):
 
         self.invoice_data = self._carregar_fatura_selecionada()
 
+        self._sincronizar_fatura_com_saldo()
+
         self._recarregar_tabela()
         self.data_changed.emit()
 
@@ -1055,6 +1088,8 @@ class CreditCardInvoicePage(QWidget):
             return
 
         self.invoice_data = self._carregar_fatura_selecionada()
+
+        self._sincronizar_fatura_com_saldo()
 
         self._recarregar_tabela()
         self.data_changed.emit()
