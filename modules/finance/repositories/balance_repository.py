@@ -522,3 +522,96 @@ class BalanceRepository:
             "saldo_atual_cents": saldo_atual_cents,
             "saldo_previsto_cents": saldo_previsto_cents,
         }
+
+    def buscar_compromisso_cartao(
+            self,
+            cycle_id: int,
+            credit_card_id: int,
+            due_date: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                cycle_id,
+                description,
+                expected_amount_cents,
+                actual_amount_cents,
+                due_date,
+                paid_date,
+                payment_type,
+                account_id,
+                credit_card_id,
+                status,
+                is_recurring,
+                notes,
+                created_at,
+                updated_at
+            FROM finance_balance_commitments
+            WHERE cycle_id = ?
+              AND credit_card_id = ?
+              AND due_date = ?
+              AND payment_type = 'credit_card'
+            LIMIT 1
+            """,
+            (
+                cycle_id,
+                credit_card_id,
+                due_date,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def sincronizar_compromisso_cartao(
+            self,
+            cycle_id: int,
+            credit_card_id: int,
+            account_id: int | None,
+            description: str,
+            expected_amount_cents: int,
+            due_date: str,
+            notes: str | None = None,
+    ) -> int:
+        compromisso = self.buscar_compromisso_cartao(
+            cycle_id=cycle_id,
+            credit_card_id=credit_card_id,
+            due_date=due_date,
+        )
+
+        if compromisso is None:
+            return self.criar_compromisso(
+                cycle_id=cycle_id,
+                description=description,
+                expected_amount_cents=expected_amount_cents,
+                due_date=due_date,
+                payment_type="credit_card",
+                account_id=account_id,
+                credit_card_id=credit_card_id,
+                is_recurring=False,
+                notes=notes,
+            )
+
+        if compromisso["status"] == "paid":
+            return compromisso["id"]
+
+        self.atualizar_compromisso(
+            compromisso_id=compromisso["id"],
+            description=description,
+            expected_amount_cents=expected_amount_cents,
+            due_date=due_date,
+            payment_type="credit_card",
+            account_id=account_id,
+            credit_card_id=credit_card_id,
+            is_recurring=False,
+            notes=notes,
+        )
+
+        return compromisso["id"]

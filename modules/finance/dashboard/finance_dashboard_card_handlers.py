@@ -2,6 +2,10 @@ import uuid
 from PySide6.QtWidgets import QDialog
 from modules.finance.ui.credit_card_setup_dialog import CreditCardSetupDialog
 
+from modules.finance.services.balance_account_service import (
+    BalanceAccountService,
+)
+
 class GenericFinanceDashboardCardHandler:
     def __init__(
             self,
@@ -60,6 +64,7 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
             self,
             card_generator,
             credit_card_service,
+            username: str,
     ) -> None:
 
         super().__init__(
@@ -67,6 +72,9 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
         )
 
         self.credit_card_service = credit_card_service
+        self.account_service = BalanceAccountService(
+            username
+        )
 
     def hydrate_card_data(
             self,
@@ -117,6 +125,7 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
 
         setup_dialog = CreditCardSetupDialog(
             assets=self.credit_card_service.listar_assets(),
+            accounts=self.account_service.listar_contas(),
         )
 
         if setup_dialog.exec() != QDialog.Accepted:
@@ -134,6 +143,8 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
             closing_day=card_config["closing_day"],
             due_day=card_config["due_day"],
             last_four_digits=card_config["last_four_digits"],
+            account_id=card_config["account_id"],
+            sync_with_balance=card_config["sync_with_balance"],
         )
 
         return card_data

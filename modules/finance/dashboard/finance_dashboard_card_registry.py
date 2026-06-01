@@ -9,6 +9,7 @@ class FinanceDashboardCardRegistry:
             self,
             card_generator,
             credit_card_service=None,
+            username: str = "default",
     ) -> None:
 
         self.generic_handler = GenericFinanceDashboardCardHandler(
@@ -21,6 +22,7 @@ class FinanceDashboardCardRegistry:
             self.handlers["credit_card"] = CreditCardFinanceDashboardCardHandler(
                 card_generator=card_generator,
                 credit_card_service=credit_card_service,
+                username=username,
             )
 
     def get_handler(

@@ -1,0 +1,158 @@
+from datetime import date
+
+from modules.finance.repositories.balance_repository import BalanceRepository
+from modules.finance.repositories.credit_card_repository import CreditCardRepository
+from modules.finance.repositories.credit_card_expense_repository import (
+    CreditCardExpenseRepository,
+)
+
+
+class CreditCardBalanceSyncService:
+    def __init__(
+            self,
+            username: str,
+    ) -> None:
+        self.username = username
+
+        self.balance_repository = BalanceRepository(
+            username
+        )
+
+        self.credit_card_repository = CreditCardRepository(
+            username
+        )
+
+        self.expense_repository = CreditCardExpenseRepository(
+            username
+        )
+
+    def sincronizar_fatura_com_saldo(
+            self,
+            credit_card_id: int,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> int | None:
+        credit_card = self._buscar_cartao_por_id(
+            credit_card_id
+        )
+
+        if credit_card is None:
+            raise ValueError(
+                f"Cartão não encontrado: {credit_card_id}"
+            )
+
+        if credit_card["sync_with_balance"] != 1:
+            return None
+
+        if credit_card["account_id"] is None:
+            return None
+
+        valor_fatura_cents = self.expense_repository.somar_fatura(
+            credit_card_id=credit_card_id,
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
+
+        if valor_fatura_cents <= 0:
+            return None
+
+        due_date = self._calcular_data_vencimento(
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+            due_day=credit_card["due_day"],
+        )
+
+        cycle = self._encontrar_ciclo_por_data(
+            due_date
+        )
+
+        if cycle is None:
+            raise ValueError(
+                f"Nenhum ciclo encontrado para o vencimento {due_date}"
+            )
+
+        description = (
+            f"Fatura {credit_card['name']} "
+            f"{invoice_month:02d}/{invoice_year}"
+        )
+
+        return self.balance_repository.sincronizar_compromisso_cartao(
+            cycle_id=cycle["id"],
+            credit_card_id=credit_card_id,
+            account_id=credit_card["account_id"],
+            description=description,
+            expected_amount_cents=valor_fatura_cents,
+            due_date=due_date,
+            notes="Compromisso gerado automaticamente pelo cartão de crédito.",
+        )
+
+    def _buscar_cartao_por_id(
+            self,
+            credit_card_id: int,
+    ) -> dict | None:
+        for card in self.credit_card_repository.listar_cartoes_ativos():
+            if card["id"] == credit_card_id:
+                return card
+
+        return None
+
+    def _encontrar_ciclo_por_data(
+            self,
+            data_iso: str,
+    ) -> dict | None:
+        data_referencia = date.fromisoformat(
+            data_iso
+        )
+
+        ciclos = self.balance_repository.listar_ciclos_ativos()
+
+        for ciclo in ciclos:
+            start_date = date.fromisoformat(
+                ciclo["start_date"]
+            )
+            end_date = date.fromisoformat(
+                ciclo["end_date"]
+            )
+
+            if start_date <= data_referencia <= end_date:
+                return ciclo
+
+        return None
+
+    def _calcular_data_vencimento(
+            self,
+            invoice_year: int,
+            invoice_month: int,
+            due_day: int,
+    ) -> str:
+        ultimo_dia_mes = self._ultimo_dia_mes(
+            invoice_year,
+            invoice_month,
+        )
+
+        dia = min(
+            due_day,
+            ultimo_dia_mes,
+        )
+
+        return date(
+            invoice_year,
+            invoice_month,
+            dia,
+        ).isoformat()
+
+    def _ultimo_dia_mes(
+            self,
+            year: int,
+            month: int,
+    ) -> int:
+        if month == 12:
+            proximo_mes = date(year + 1, 1, 1)
+        else:
+            proximo_mes = date(year, month + 1, 1)
+
+        ultimo_dia = proximo_mes.replace(day=1).toordinal() - 1
+
+        return date.fromordinal(
+            ultimo_dia
+        ).day

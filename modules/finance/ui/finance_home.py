@@ -61,6 +61,7 @@ class FinanceHome(BaseScreen):
         self.dashboard_card_registry = FinanceDashboardCardRegistry(
             card_generator=gerar_card_financeiro,
             credit_card_service=self.credit_card_service,
+            username=self.username,
         )
 
         DatabaseManager(

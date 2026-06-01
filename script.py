@@ -1,8 +1,13 @@
-from modules.finance.services.credit_card_service import CreditCardService
+from modules.finance.services.credit_card_balance_sync_service import (
+    CreditCardBalanceSyncService,
+)
 
-service = CreditCardService("default")
+service = CreditCardBalanceSyncService("default")
 
-print("=== CARTÕES ATIVOS ===")
+commitment_id = service.sincronizar_fatura_com_saldo(
+    credit_card_id=2,
+    invoice_year=2026,
+    invoice_month=6,
+)
 
-for card in service.listar_cartoes_ativos():
-    print(card)
+print("Compromisso sincronizado:", commitment_id)
