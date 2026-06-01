@@ -66,6 +66,33 @@ class BalanceAccountService:
             is_investment=is_investment,
         )
 
+    def definir_saldo_inicial_conta(
+            self,
+            cycle_id: int,
+            account_id: int,
+            opening_balance_cents: int,
+    ) -> None:
+        self.repository.definir_saldo_inicial_conta(
+            cycle_id=cycle_id,
+            account_id=account_id,
+            opening_balance_cents=opening_balance_cents,
+        )
+
+    def buscar_saldo_inicial_conta(
+            self,
+            cycle_id: int,
+            account_id: int,
+    ) -> int:
+        saldos = self.repository.listar_saldos_iniciais_ciclo(
+            cycle_id
+        )
+
+        for saldo in saldos:
+            if saldo["account_id"] == account_id:
+                return saldo["opening_balance_cents"]
+
+        return 0
+
     def desativar_conta(
             self,
             account_id: int,

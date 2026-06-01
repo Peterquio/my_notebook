@@ -40,6 +40,8 @@ class CreditCardRepository:
             closing_day: int,
             due_day: int,
             last_four_digits: str | None = None,
+            account_id: int | None = None,
+            sync_with_balance: bool = False,
     ) -> int:
 
         cursor = self.conexao.cursor()
@@ -53,9 +55,11 @@ class CreditCardRepository:
                 limit_amount_cents,
                 closing_day,
                 due_day,
-                last_four_digits
+                last_four_digits,
+                account_id,
+                sync_with_balance
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dashboard_card_id,
@@ -65,6 +69,8 @@ class CreditCardRepository:
                 closing_day,
                 due_day,
                 last_four_digits,
+                account_id,
+                int(sync_with_balance),
             ),
         )
 
@@ -90,6 +96,8 @@ class CreditCardRepository:
                 cc.closing_day,
                 cc.due_day,
                 cc.last_four_digits,
+                cc.account_id,
+                cc.sync_with_balance,
 
                 a.bank_name,
                 a.asset_name,
@@ -123,6 +131,8 @@ class CreditCardRepository:
                    cc.closing_day,
                    cc.due_day,
                    cc.last_four_digits,
+                   cc.account_id,
+                   cc.sync_with_balance,
 
                    a.bank_name,
                    a.asset_name,

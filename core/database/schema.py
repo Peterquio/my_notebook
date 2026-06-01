@@ -180,6 +180,9 @@ CREATE TABLE IF NOT EXISTS finance_credit_cards (
     due_day INTEGER NOT NULL,
 
     last_four_digits TEXT,
+    
+    account_id INTEGER,
+    sync_with_balance INTEGER NOT NULL DEFAULT 0,
 
     is_active INTEGER DEFAULT 1,
 
@@ -187,7 +190,10 @@ CREATE TABLE IF NOT EXISTS finance_credit_cards (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (asset_id)
-        REFERENCES finance_credit_card_assets(id)
+        REFERENCES finance_credit_card_assets(id),
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id)
 );
 
 CREATE TABLE IF NOT EXISTS finance_credit_card_invoices (

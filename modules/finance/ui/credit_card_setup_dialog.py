@@ -226,11 +226,13 @@ class CreditCardSetupDialog(QDialog):
     def __init__(
             self,
             assets: list[dict],
+            accounts: list[dict] | None = None,
             parent=None,
     ) -> None:
         super().__init__(parent)
 
         self.assets = assets
+        self.accounts = accounts or []
         self.asset_resolver = CreditCardAssetResolver()
 
         self.setWindowTitle("Configurar cartão")
@@ -348,6 +350,38 @@ class CreditCardSetupDialog(QDialog):
         form_layout.addWidget(QLabel("Número mascarado"))
         form_layout.addWidget(self.last_digits_input)
 
+        self.account_combo = QComboBox()
+
+        self.account_combo.addItem(
+            "Não definida",
+            None,
+        )
+
+        for account in self.accounts:
+            self.account_combo.addItem(
+                account["name"],
+                account["id"],
+            )
+
+        from PySide6.QtWidgets import QCheckBox
+
+        self.sync_balance_checkbox = QCheckBox(
+            "Sincronizar com módulo Saldo"
+        )
+
+        self.sync_balance_checkbox.setChecked(False)
+
+        form_layout.addWidget(
+            QLabel("Conta padrão para pagamento")
+        )
+        form_layout.addWidget(
+            self.account_combo
+        )
+
+        form_layout.addWidget(
+            self.sync_balance_checkbox
+        )
+
         form_layout.addStretch()
 
         content_layout.addLayout(left_layout, stretch=1)
@@ -462,4 +496,9 @@ class CreditCardSetupDialog(QDialog):
             "closing_day": self.closing_day_input.value(),
             "due_day": self.due_day_input.value(),
             "last_four_digits": self.last_digits_input.text().strip() or None,
+
+            "account_id": self.account_combo.currentData(),
+            "sync_with_balance": (
+                self.sync_balance_checkbox.isChecked()
+            ),
         }

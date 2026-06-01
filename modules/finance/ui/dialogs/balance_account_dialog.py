@@ -174,7 +174,11 @@ class BalanceAccountDialog(QDialog):
             self.account_data.get("account_number") or ""
         )
 
-        self.opening_balance_input.setText("0,00")
+        self.opening_balance_input.setText(
+            self._formatar_centavos_para_texto(
+                self.account_data.get("opening_balance_cents", 0)
+            )
+        )
 
         self.global_checkbox.setChecked(
             bool(self.account_data["include_in_global_balance"])

@@ -38,6 +38,8 @@ class CreditCardService:
             closing_day: int,
             due_day: int,
             last_four_digits: str | None = None,
+            account_id: int | None = None,
+            sync_with_balance: bool = False,
     ) -> int:
 
         return self.repository.criar_cartao(
@@ -48,6 +50,8 @@ class CreditCardService:
             closing_day=closing_day,
             due_day=due_day,
             last_four_digits=last_four_digits,
+            account_id=account_id,
+            sync_with_balance=sync_with_balance,
         )
 
     def buscar_por_dashboard_card_id(

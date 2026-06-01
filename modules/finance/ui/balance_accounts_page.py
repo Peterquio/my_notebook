@@ -88,13 +88,16 @@ class BalanceAccountsPage(QWidget):
         layout.addLayout(header)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
             [
                 "CONTA",
+                "BANCO",
+                "AGÊNCIA",
+                "Nº CONTA",
                 "TIPO",
-                "SALDO GLOBAL",
-                "INVESTIMENTO",
+                "SALDO INICIAL",
+                "GLOBAL",
             ]
         )
 
@@ -108,10 +111,16 @@ class BalanceAccountsPage(QWidget):
         header_table.setSectionResizeMode(1, QHeaderView.Fixed)
         header_table.setSectionResizeMode(2, QHeaderView.Fixed)
         header_table.setSectionResizeMode(3, QHeaderView.Fixed)
+        header_table.setSectionResizeMode(4, QHeaderView.Fixed)
+        header_table.setSectionResizeMode(5, QHeaderView.Fixed)
+        header_table.setSectionResizeMode(6, QHeaderView.Fixed)
 
-        self.table.setColumnWidth(1, 140)
-        self.table.setColumnWidth(2, 130)
-        self.table.setColumnWidth(3, 130)
+        self.table.setColumnWidth(1, 150)
+        self.table.setColumnWidth(2, 90)
+        self.table.setColumnWidth(3, 120)
+        self.table.setColumnWidth(4, 110)
+        self.table.setColumnWidth(5, 120)
+        self.table.setColumnWidth(6, 80)
 
         layout.addWidget(self.table, 1)
 
@@ -174,18 +183,26 @@ class BalanceAccountsPage(QWidget):
             conta["account_type"],
         )
 
+        saldo_inicial = self.account_service.buscar_saldo_inicial_conta(
+            cycle_id=self.selected_cycle_id,
+            account_id=conta["id"],
+        ) if self.selected_cycle_id is not None else 0
+
         valores = [
             conta["name"],
+            conta.get("institution_name") or "-",
+            conta.get("agency") or "-",
+            conta.get("account_number") or "-",
             tipo_nome,
+            self._formatar_moeda(saldo_inicial),
             "Sim" if conta["include_in_global_balance"] else "Não",
-            "Sim" if conta["is_investment"] else "Não",
         ]
 
         for col_index, valor in enumerate(valores):
             item = QTableWidgetItem(valor)
             item.setData(Qt.UserRole, conta)
 
-            if col_index in [1, 2, 3]:
+            if col_index in [2, 4, 5, 6]:
                 item.setTextAlignment(Qt.AlignCenter)
 
             self.table.setItem(
@@ -241,13 +258,10 @@ class BalanceAccountsPage(QWidget):
             opening_balance_cents: int,
     ) -> None:
 
-        if opening_balance_cents <= 0:
-            return
-
         if self.selected_cycle_id is None:
             return
 
-        self.account_service.repository.definir_saldo_inicial_conta(
+        self.account_service.definir_saldo_inicial_conta(
             cycle_id=self.selected_cycle_id,
             account_id=account_id,
             opening_balance_cents=opening_balance_cents,
@@ -264,8 +278,19 @@ class BalanceAccountsPage(QWidget):
             )
             return
 
+        saldo_inicial_cents = 0
+
+        if self.selected_cycle_id is not None:
+            saldo_inicial_cents = self.account_service.buscar_saldo_inicial_conta(
+                cycle_id=self.selected_cycle_id,
+                account_id=conta["id"],
+            )
+
+        conta_para_edicao = dict(conta)
+        conta_para_edicao["opening_balance_cents"] = saldo_inicial_cents
+
         dialog = BalanceAccountDialog(
-            account_data=conta,
+            account_data=conta_para_edicao,
             parent=self,
         )
 
@@ -326,4 +351,19 @@ class BalanceAccountsPage(QWidget):
             data_iso: str,
     ) -> str:
         ano, mes, dia = data_iso.split("-")
-        return f"{dia}/{mes}/{ano}" 
+        return f"{dia}/{mes}/{ano}"
+
+    def _formatar_moeda(
+            self,
+            valor_cents: int,
+    ) -> str:
+        valor = valor_cents / 100
+        texto = f"{valor:,.2f}"
+
+        return (
+                "R$ "
+                + texto
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+        )
