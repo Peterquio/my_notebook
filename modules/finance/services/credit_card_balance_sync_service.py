@@ -80,14 +80,9 @@ class CreditCardBalanceSyncService:
             due_day=credit_card["due_day"],
         )
 
-        cycle = self._encontrar_ciclo_por_data(
+        cycle = self._obter_ou_criar_ciclo_por_data(
             due_date
         )
-
-        if cycle is None:
-            raise ValueError(
-                f"Nenhum ciclo encontrado para o vencimento {due_date}"
-            )
 
         compromisso_ids = []
 
@@ -193,6 +188,126 @@ class CreditCardBalanceSyncService:
 
         return None
 
+    def _obter_ou_criar_ciclo_por_data(
+            self,
+            data_iso: str,
+    ) -> dict:
+        ciclo = self._encontrar_ciclo_por_data(
+            data_iso
+        )
+
+        if ciclo is not None:
+            return ciclo
+
+        ciclos = self.balance_repository.listar_ciclos_ativos()
+
+        if not ciclos:
+            raise ValueError(
+                "Nenhum ciclo financeiro foi criado ainda. "
+                "Crie o primeiro ciclo no módulo Saldo antes de sincronizar faturas."
+            )
+
+        ciclos_ordenados = sorted(
+            ciclos,
+            key=lambda item: item["start_date"],
+        )
+
+        ultimo_ciclo = ciclos_ordenados[-1]
+
+        data_referencia = date.fromisoformat(
+            data_iso
+        )
+
+        start_date = date.fromisoformat(
+            ultimo_ciclo["start_date"]
+        )
+
+        end_date = date.fromisoformat(
+            ultimo_ciclo["end_date"]
+        )
+
+        while data_referencia > end_date:
+            novo_start = end_date.fromordinal(
+                end_date.toordinal() + 1
+            )
+
+            novo_end = self._calcular_fim_proximo_ciclo(
+                novo_start
+            )
+
+            nome = self._montar_nome_ciclo(
+                novo_start
+            )
+
+            cycle_id = self.balance_repository.criar_ciclo(
+                name=nome,
+                start_date=novo_start.isoformat(),
+                end_date=novo_end.isoformat(),
+                opening_balance_source="auto",
+            )
+
+            ultimo_ciclo = self.balance_repository.buscar_ciclo_por_id(
+                cycle_id
+            )
+
+            if ultimo_ciclo is None:
+                raise ValueError(
+                    "O ciclo financeiro foi criado, mas não pôde ser carregado."
+                )
+
+            start_date = date.fromisoformat(
+                ultimo_ciclo["start_date"]
+            )
+
+            end_date = date.fromisoformat(
+                ultimo_ciclo["end_date"]
+            )
+
+        return ultimo_ciclo
+
+    def _calcular_fim_proximo_ciclo(
+            self,
+            start_date: date,
+    ) -> date:
+        if start_date.day == 1:
+            return date(
+                start_date.year,
+                start_date.month,
+                self._ultimo_dia_mes(
+                    start_date.year,
+                    start_date.month,
+                ),
+            )
+
+        proximo_mes_year, proximo_mes_month = self._somar_meses_competencia(
+            year=start_date.year,
+            month=start_date.month,
+            deslocamento=1,
+        )
+
+        ultimo_dia_mes_destino = self._ultimo_dia_mes(
+            proximo_mes_year,
+            proximo_mes_month,
+        )
+
+        dia_fim = min(
+            start_date.day - 1,
+            ultimo_dia_mes_destino,
+        )
+
+        return date(
+            proximo_mes_year,
+            proximo_mes_month,
+            dia_fim,
+        )
+
+    def _montar_nome_ciclo(
+            self,
+            start_date: date,
+    ) -> str:
+        return f"Ciclo {start_date.month:02d}/{start_date.year}"
+
+
     def _encontrar_ciclo_por_data(
             self,
             data_iso: str,
@@ -253,3 +368,15 @@ class CreditCardBalanceSyncService:
         return date.fromordinal(
             ultimo_dia
         ).day
+
+    def _somar_meses_competencia(
+            self,
+            year: int,
+            month: int,
+            deslocamento: int,
+    ) -> tuple[int, int]:
+        mes_total = month - 1 + deslocamento
+        novo_ano = year + mes_total // 12
+        novo_mes = mes_total % 12 + 1
+
+        return novo_ano, novo_mes

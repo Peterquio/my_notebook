@@ -411,6 +411,7 @@ class BalanceRepository:
     def atualizar_compromisso(
             self,
             compromisso_id: int,
+            cycle_id: int,
             description: str,
             expected_amount_cents: int,
             due_date: str,
@@ -431,6 +432,7 @@ class BalanceRepository:
             """
             UPDATE finance_balance_commitments
             SET
+                cycle_id = ?,
                 description = ?,
                 expected_amount_cents = ?,
                 actual_amount_cents = ?,
@@ -447,6 +449,7 @@ class BalanceRepository:
             WHERE id = ?
             """,
             (
+                cycle_id,
                 description,
                 expected_amount_cents,
                 actual_amount_cents,
