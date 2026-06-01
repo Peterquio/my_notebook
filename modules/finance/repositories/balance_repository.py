@@ -144,6 +144,10 @@ class BalanceRepository:
             credit_card_id: int | None = None,
             is_recurring: bool = False,
             notes: str | None = None,
+            external_reference: str | None = None,
+            status: str = "expected",
+            actual_amount_cents: int | None = None,
+            paid_date: str | None = None,
     ) -> int:
         cursor = self.conexao.cursor()
 
@@ -153,25 +157,32 @@ class BalanceRepository:
                 cycle_id,
                 description,
                 expected_amount_cents,
+                actual_amount_cents,
                 due_date,
+                paid_date,
                 payment_type,
                 account_id,
                 credit_card_id,
                 status,
                 is_recurring,
+                external_reference,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'expected', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 cycle_id,
                 description,
                 expected_amount_cents,
+                actual_amount_cents,
                 due_date,
+                paid_date,
                 payment_type,
                 account_id,
                 credit_card_id,
+                status,
                 int(is_recurring),
+                external_reference,
                 notes,
             ),
         )
@@ -198,6 +209,7 @@ class BalanceRepository:
                 payment_type,
                 account_id,
                 credit_card_id,
+                external_reference,
                 status,
                 is_recurring,
                 notes,
@@ -406,8 +418,13 @@ class BalanceRepository:
             account_id: int | None,
             credit_card_id: int | None,
             is_recurring: bool,
-            notes: str | None,
+            notes: str | None = None,
+            external_reference: str | None = None,
+            status: str = "expected",
+            actual_amount_cents: int | None = None,
+            paid_date: str | None = None,
     ) -> None:
+
         cursor = self.conexao.cursor()
 
         cursor.execute(
@@ -416,11 +433,15 @@ class BalanceRepository:
             SET
                 description = ?,
                 expected_amount_cents = ?,
+                actual_amount_cents = ?,
                 due_date = ?,
+                paid_date = ?,
                 payment_type = ?,
                 account_id = ?,
                 credit_card_id = ?,
+                status = ?,
                 is_recurring = ?,
+                external_reference = ?,
                 notes = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -428,11 +449,15 @@ class BalanceRepository:
             (
                 description,
                 expected_amount_cents,
+                actual_amount_cents,
                 due_date,
+                paid_date,
                 payment_type,
                 account_id,
                 credit_card_id,
+                status,
                 int(is_recurring),
+                external_reference,
                 notes,
                 compromisso_id,
             ),
@@ -612,6 +637,57 @@ class BalanceRepository:
             credit_card_id=credit_card_id,
             is_recurring=False,
             notes=notes,
+        )
+
+        return compromisso["id"]
+
+    def buscar_compromisso_por_external_reference(
+            self,
+            external_reference: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_commitments
+            WHERE external_reference = ?
+            LIMIT 1
+            """,
+            (
+                external_reference,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def upsert_compromisso_por_external_reference(
+            self,
+            external_reference: str,
+            **dados,
+    ) -> int:
+
+        compromisso = (
+            self.buscar_compromisso_por_external_reference(
+                external_reference
+            )
+        )
+
+        if compromisso is None:
+            return self.criar_compromisso(
+                external_reference=external_reference,
+                **dados,
+            )
+
+        self.atualizar_compromisso(
+            compromisso_id=compromisso["id"],
+            external_reference=external_reference,
+            **dados,
         )
 
         return compromisso["id"]

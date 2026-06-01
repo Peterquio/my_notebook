@@ -118,3 +118,49 @@ class CreditCardInvoiceAdjustmentRepository:
         )
 
         return cursor.fetchone() is not None
+
+    def listar_ajustes_fatura(
+            self,
+            credit_card_id: int,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                a.id,
+                a.credit_card_id,
+                a.invoice_id,
+                a.adjustment_type,
+                a.description,
+                a.adjustment_date,
+                a.amount_cents,
+                a.source_type,
+                a.source_reference,
+                a.notes,
+                a.status,
+                a.created_at,
+                a.updated_at
+            FROM finance_credit_card_invoice_adjustments a
+            INNER JOIN finance_credit_card_invoices i
+                ON i.id = a.invoice_id
+            WHERE a.credit_card_id = ?
+              AND i.invoice_year = ?
+              AND i.invoice_month = ?
+              AND a.status != 'cancelled'
+              AND a.adjustment_type != 'previous_invoice_payment'
+            ORDER BY a.adjustment_date ASC, a.id ASC
+            """,
+            (
+                credit_card_id,
+                invoice_year,
+                invoice_month,
+            ),
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]

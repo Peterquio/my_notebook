@@ -2,8 +2,13 @@ from datetime import date
 
 from modules.finance.repositories.balance_repository import BalanceRepository
 from modules.finance.repositories.credit_card_repository import CreditCardRepository
-from modules.finance.repositories.credit_card_expense_repository import (
-    CreditCardExpenseRepository,
+
+from modules.finance.services.credit_card_detail_service import (
+    CreditCardDetailService,
+)
+
+from modules.finance.repositories.credit_card_invoice_adjustment_repository import (
+    CreditCardInvoiceAdjustmentRepository,
 )
 
 
@@ -22,8 +27,14 @@ class CreditCardBalanceSyncService:
             username
         )
 
-        self.expense_repository = CreditCardExpenseRepository(
+        self.detail_service = CreditCardDetailService(
             username
+        )
+
+        self.adjustment_repository = (
+            CreditCardInvoiceAdjustmentRepository(
+                username
+            )
         )
 
     def sincronizar_fatura_com_saldo(
@@ -31,7 +42,7 @@ class CreditCardBalanceSyncService:
             credit_card_id: int,
             invoice_year: int,
             invoice_month: int,
-    ) -> int | None:
+    ) -> list[int]:
         credit_card = self._buscar_cartao_por_id(
             credit_card_id
         )
@@ -42,19 +53,26 @@ class CreditCardBalanceSyncService:
             )
 
         if credit_card["sync_with_balance"] != 1:
-            return None
+            return []
 
         if credit_card["account_id"] is None:
-            return None
+            return []
 
-        valor_fatura_cents = self.expense_repository.somar_fatura(
-            credit_card_id=credit_card_id,
+        invoice_data = self.detail_service.carregar_fatura_por_mes(
+            credit_card=credit_card,
             invoice_year=invoice_year,
             invoice_month=invoice_month,
         )
 
-        if valor_fatura_cents <= 0:
-            return None
+        valor_a_pagar_cents = int(
+            invoice_data["valor_a_pagar_cents"] or 0
+        )
+
+        ajustes = self.adjustment_repository.listar_ajustes_fatura(
+            credit_card_id=credit_card_id,
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
 
         due_date = self._calcular_data_vencimento(
             invoice_year=invoice_year,
@@ -71,20 +89,99 @@ class CreditCardBalanceSyncService:
                 f"Nenhum ciclo encontrado para o vencimento {due_date}"
             )
 
-        description = (
-            f"Fatura {credit_card['name']} "
-            f"{invoice_month:02d}/{invoice_year}"
-        )
+        compromisso_ids = []
 
-        return self.balance_repository.sincronizar_compromisso_cartao(
-            cycle_id=cycle["id"],
-            credit_card_id=credit_card_id,
-            account_id=credit_card["account_id"],
-            description=description,
-            expected_amount_cents=valor_fatura_cents,
-            due_date=due_date,
-            notes="Compromisso gerado automaticamente pelo cartão de crédito.",
-        )
+        for ajuste in ajustes:
+            if ajuste["adjustment_type"] != "payment_received":
+                continue
+
+            valor_pago_cents = abs(
+                int(ajuste["amount_cents"] or 0)
+            )
+
+            if valor_pago_cents <= 0:
+                continue
+
+            external_reference = (
+                f"cc:{credit_card_id}:"
+                f"{invoice_year}:"
+                f"{invoice_month:02d}:"
+                f"payment:{ajuste['id']}"
+            )
+
+            description = (
+                f"Fatura {credit_card['name']} "
+                f"{invoice_month:02d}/{invoice_year} "
+                f"— pagamento {self._formatar_data_br(ajuste['adjustment_date'])}"
+            )
+
+            compromisso_id = (
+                self.balance_repository.upsert_compromisso_por_external_reference(
+                    external_reference=external_reference,
+                    cycle_id=cycle["id"],
+                    description=description,
+                    expected_amount_cents=valor_pago_cents,
+                    actual_amount_cents=valor_pago_cents,
+                    due_date=ajuste["adjustment_date"],
+                    paid_date=ajuste["adjustment_date"],
+                    payment_type="credit_card",
+                    account_id=credit_card["account_id"],
+                    credit_card_id=credit_card_id,
+                    status="paid",
+                    is_recurring=False,
+                    notes="Pagamento de fatura sincronizado automaticamente pelo cartão de crédito.",
+                )
+            )
+
+            compromisso_ids.append(
+                compromisso_id
+            )
+
+        if valor_a_pagar_cents > 0:
+            external_reference = (
+                f"cc:{credit_card_id}:"
+                f"{invoice_year}:"
+                f"{invoice_month:02d}:"
+                f"open"
+            )
+
+            description = (
+                f"Fatura {credit_card['name']} "
+                f"{invoice_month:02d}/{invoice_year} "
+                f"— saldo em aberto"
+            )
+
+            compromisso_id = (
+                self.balance_repository.upsert_compromisso_por_external_reference(
+                    external_reference=external_reference,
+                    cycle_id=cycle["id"],
+                    description=description,
+                    expected_amount_cents=valor_a_pagar_cents,
+                    actual_amount_cents=None,
+                    due_date=due_date,
+                    paid_date=None,
+                    payment_type="credit_card",
+                    account_id=credit_card["account_id"],
+                    credit_card_id=credit_card_id,
+                    status="expected",
+                    is_recurring=False,
+                    notes="Saldo em aberto da fatura sincronizado automaticamente pelo cartão de crédito.",
+                )
+            )
+
+            compromisso_ids.append(
+                compromisso_id
+            )
+
+        return compromisso_ids
+
+    def _formatar_data_br(
+            self,
+            data_iso: str,
+    ) -> str:
+        ano, mes, dia = data_iso.split("-")
+
+        return f"{dia}/{mes}/{ano}"
 
     def _buscar_cartao_por_id(
             self,

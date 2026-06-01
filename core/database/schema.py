@@ -394,6 +394,8 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
     account_id INTEGER,
     credit_card_id INTEGER,
 
+    external_reference TEXT,
+
     status TEXT NOT NULL DEFAULT 'expected',
 
     is_recurring INTEGER NOT NULL DEFAULT 0,
