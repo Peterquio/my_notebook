@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -20,6 +21,10 @@ from ui.dialogs.color_picker_dialog import (
     escolher_cor,
 )
 
+from modules.finance.services.finance_category_settings_service import (
+    FinanceCategorySettingsService,
+)
+
 class FinanceCategoryManagerDialog(QDialog):
     def __init__(
             self,
@@ -30,6 +35,13 @@ class FinanceCategoryManagerDialog(QDialog):
 
         self.username = username
         self.service = FinanceCategoryService(username)
+        self.settings_service = FinanceCategorySettingsService(username)
+
+        self.settings_service = (
+            FinanceCategorySettingsService(
+                username
+            )
+        )
 
         self.setWindowTitle("Categorias de Gastos")
         self.resize(760, 560)
@@ -153,8 +165,25 @@ class FinanceCategoryManagerDialog(QDialog):
         fechar.clicked.connect(self.close)
         fechar.setFixedWidth(120)
 
+        exportar = QPushButton("Exportar")
+        exportar.setCursor(Qt.PointingHandCursor)
+        exportar.clicked.connect(
+            self._exportar_categorias
+        )
+
+        importar = QPushButton("Importar")
+        importar.setCursor(Qt.PointingHandCursor)
+        importar.clicked.connect(
+            self._importar_categorias
+        )
+
         footer = QHBoxLayout()
+
+        footer.addWidget(exportar)
+        footer.addWidget(importar)
+
         footer.addStretch()
+
         footer.addWidget(salvar_tudo)
         footer.addWidget(fechar)
 
@@ -692,3 +721,108 @@ class FinanceCategoryManagerDialog(QDialog):
     ) -> None:
         self.service.reativar_categoria(category_id)
         self._carregar_categorias()
+
+    def _exportar_categorias(self) -> None:
+        caminho_arquivo, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar categorias",
+            "categorias_financeiras.json",
+            "Arquivos JSON (*.json)",
+        )
+
+        if not caminho_arquivo:
+            return
+
+        try:
+            resultado = self.settings_service.exportar_categorias(
+                caminho_arquivo
+            )
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao exportar categorias",
+                str(erro),
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Categorias exportadas",
+            (
+                "Categorias exportadas com sucesso.\n\n"
+                f"Total exportado: {resultado['exportadas']}"
+            ),
+        )
+
+    def _importar_categorias(self) -> None:
+        caminho_arquivo, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importar categorias",
+            "",
+            "Arquivos JSON (*.json)",
+        )
+
+        if not caminho_arquivo:
+            return
+
+        mensagem = QMessageBox(self)
+        mensagem.setWindowTitle("Importar categorias")
+        mensagem.setText("Como deseja importar as categorias?")
+        mensagem.setInformativeText(
+            "Mesclar mantém as categorias atuais e adiciona/atualiza as do arquivo.\n\n"
+            "Substituir desativa categorias atuais que não estiverem no arquivo."
+        )
+
+        botao_mesclar = mensagem.addButton(
+            "Mesclar",
+            QMessageBox.AcceptRole,
+        )
+
+        botao_substituir = mensagem.addButton(
+            "Substituir",
+            QMessageBox.DestructiveRole,
+        )
+
+        mensagem.addButton(
+            "Cancelar",
+            QMessageBox.RejectRole,
+        )
+
+        mensagem.exec()
+
+        botao_clicado = mensagem.clickedButton()
+
+        if botao_clicado is None:
+            return
+
+        if mensagem.buttonRole(botao_clicado) == QMessageBox.RejectRole:
+            return
+
+        substituir = botao_clicado == botao_substituir
+
+        try:
+            resultado = self.settings_service.importar_categorias(
+                caminho_arquivo,
+                substituir=substituir,
+            )
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao importar categorias",
+                str(erro),
+            )
+            return
+
+        self._carregar_categorias()
+
+        QMessageBox.information(
+            self,
+            "Categorias importadas",
+            (
+                "Importação concluída com sucesso.\n\n"
+                f"Criadas: {resultado['criadas']}\n"
+                f"Atualizadas: {resultado['atualizadas']}\n"
+                f"Reativadas: {resultado['reativadas']}\n"
+                f"Desativadas: {resultado['desativadas']}"
+            ),
+        )

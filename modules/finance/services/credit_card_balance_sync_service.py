@@ -2,6 +2,7 @@ from datetime import date
 
 from modules.finance.repositories.balance_repository import BalanceRepository
 from modules.finance.repositories.credit_card_repository import CreditCardRepository
+from modules.finance.services.balance_service import BalanceService
 
 from modules.finance.services.credit_card_detail_service import (
     CreditCardDetailService,
@@ -12,6 +13,7 @@ from modules.finance.repositories.credit_card_invoice_adjustment_repository impo
 )
 
 
+
 class CreditCardBalanceSyncService:
     def __init__(
             self,
@@ -20,6 +22,10 @@ class CreditCardBalanceSyncService:
         self.username = username
 
         self.balance_repository = BalanceRepository(
+            username
+        )
+
+        self.balance_service = BalanceService(
             username
         )
 
@@ -85,6 +91,7 @@ class CreditCardBalanceSyncService:
         )
 
         compromisso_ids = []
+        referencias_pagamentos_atuais = set()
 
         for ajuste in ajustes:
             if ajuste["adjustment_type"] != "payment_received":
@@ -102,6 +109,10 @@ class CreditCardBalanceSyncService:
                 f"{invoice_year}:"
                 f"{invoice_month:02d}:"
                 f"payment:{ajuste['id']}"
+            )
+
+            referencias_pagamentos_atuais.add(
+                external_reference
             )
 
             description = (
@@ -132,14 +143,21 @@ class CreditCardBalanceSyncService:
                 compromisso_id
             )
 
-        if valor_a_pagar_cents > 0:
-            external_reference = (
-                f"cc:{credit_card_id}:"
-                f"{invoice_year}:"
-                f"{invoice_month:02d}:"
-                f"open"
-            )
+        self._remover_pagamentos_sincronizados_que_nao_existem_mais(
+            credit_card_id=credit_card_id,
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+            referencias_pagamentos_atuais=referencias_pagamentos_atuais,
+        )
 
+        external_reference_open = (
+            f"cc:{credit_card_id}:"
+            f"{invoice_year}:"
+            f"{invoice_month:02d}:"
+            f"open"
+        )
+
+        if valor_a_pagar_cents > 0:
             description = (
                 f"Fatura {credit_card['name']} "
                 f"{invoice_month:02d}/{invoice_year} "
@@ -148,7 +166,7 @@ class CreditCardBalanceSyncService:
 
             compromisso_id = (
                 self.balance_repository.upsert_compromisso_por_external_reference(
-                    external_reference=external_reference,
+                    external_reference=external_reference_open,
                     cycle_id=cycle["id"],
                     description=description,
                     expected_amount_cents=valor_a_pagar_cents,
@@ -167,8 +185,59 @@ class CreditCardBalanceSyncService:
             compromisso_ids.append(
                 compromisso_id
             )
+        else:
+            self._excluir_compromisso_por_external_reference(
+                external_reference_open
+            )
 
         return compromisso_ids
+
+    def _remover_pagamentos_sincronizados_que_nao_existem_mais(
+            self,
+            credit_card_id: int,
+            invoice_year: int,
+            invoice_month: int,
+            referencias_pagamentos_atuais: set[str],
+    ) -> None:
+        prefixo_pagamento = (
+            f"cc:{credit_card_id}:"
+            f"{invoice_year}:"
+            f"{invoice_month:02d}:"
+            f"payment:"
+        )
+
+        compromissos_sincronizados = (
+            self.balance_repository.listar_compromissos_por_prefixo_external_reference(
+                prefixo_pagamento
+            )
+        )
+
+        for compromisso in compromissos_sincronizados:
+            external_reference = compromisso["external_reference"]
+
+            if external_reference in referencias_pagamentos_atuais:
+                continue
+
+            self.balance_repository.excluir_compromisso(
+                compromisso["id"]
+            )
+
+    def _excluir_compromisso_por_external_reference(
+            self,
+            external_reference: str,
+    ) -> None:
+        compromisso = (
+            self.balance_repository.buscar_compromisso_por_external_reference(
+                external_reference
+            )
+        )
+
+        if compromisso is None:
+            return
+
+        self.balance_repository.excluir_compromisso(
+            compromisso["id"]
+        )
 
     def _formatar_data_br(
             self,
@@ -218,50 +287,21 @@ class CreditCardBalanceSyncService:
             data_iso
         )
 
-        start_date = date.fromisoformat(
-            ultimo_ciclo["start_date"]
-        )
-
-        end_date = date.fromisoformat(
-            ultimo_ciclo["end_date"]
-        )
-
-        while data_referencia > end_date:
-            novo_start = end_date.fromordinal(
-                end_date.toordinal() + 1
+        while data_referencia > date.fromisoformat(ultimo_ciclo["end_date"]):
+            novo_cycle_id = self.balance_service.gerar_proximo_ciclo_real(
+                ultimo_ciclo["id"]
             )
 
-            novo_end = self._calcular_fim_proximo_ciclo(
-                novo_start
+            novo_ciclo = self.balance_repository.buscar_ciclo_por_id(
+                novo_cycle_id
             )
 
-            nome = self._montar_nome_ciclo(
-                novo_start
-            )
-
-            cycle_id = self.balance_repository.criar_ciclo(
-                name=nome,
-                start_date=novo_start.isoformat(),
-                end_date=novo_end.isoformat(),
-                opening_balance_source="auto",
-            )
-
-            ultimo_ciclo = self.balance_repository.buscar_ciclo_por_id(
-                cycle_id
-            )
-
-            if ultimo_ciclo is None:
+            if novo_ciclo is None:
                 raise ValueError(
                     "O ciclo financeiro foi criado, mas não pôde ser carregado."
                 )
 
-            start_date = date.fromisoformat(
-                ultimo_ciclo["start_date"]
-            )
-
-            end_date = date.fromisoformat(
-                ultimo_ciclo["end_date"]
-            )
+            ultimo_ciclo = novo_ciclo
 
         return ultimo_ciclo
 

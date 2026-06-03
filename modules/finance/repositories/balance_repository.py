@@ -484,6 +484,26 @@ class BalanceRepository:
 
         self.conexao.commit()
 
+    def listar_compromissos_por_prefixo_external_reference(
+            self,
+            prefixo_external_reference: str,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_commitments
+            WHERE external_reference LIKE ?
+            ORDER BY id ASC
+            """,
+            (
+                f"{prefixo_external_reference}%",
+            ),
+        )
+
+        return [dict(row) for row in cursor.fetchall()]
+
     def obter_resumo_ciclo(
             self,
             cycle_id: int,

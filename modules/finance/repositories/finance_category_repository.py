@@ -177,3 +177,32 @@ class FinanceCategoryRepository:
         row = cursor.fetchone()
 
         return int(row["next_number"])
+
+    def buscar_por_nome(
+            self,
+            name: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                display_number,
+                name,
+                color,
+                is_active,
+                is_protected
+            FROM finance_categories
+            WHERE LOWER(name) = LOWER(?)
+            LIMIT 1
+            """,
+            (name,),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)

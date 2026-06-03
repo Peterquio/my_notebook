@@ -1,0 +1,114 @@
+{
+    "type": "my_notebook.finance.categories",
+    "version": 1,
+    "categories": [
+        {
+            "display_number": 1,
+            "name": "Casa",
+            "color": "#CC0000",
+            "is_active": 1
+        },
+        {
+            "display_number": 2,
+            "name": "Assinaturas",
+            "color": "#0080FF",
+            "is_active": 1
+        },
+        {
+            "display_number": 3,
+            "name": "Lanches e Restaurantes",
+            "color": "#FFFF33",
+            "is_active": 1
+        },
+        {
+            "display_number": 4,
+            "name": "Mercado",
+            "color": "#FFB266",
+            "is_active": 1
+        },
+        {
+            "display_number": 5,
+            "name": "Farmácia",
+            "color": "#99FFCC",
+            "is_active": 1
+        },
+        {
+            "display_number": 6,
+            "name": "Jogos",
+            "color": "#990099",
+            "is_active": 1
+        },
+        {
+            "display_number": 7,
+            "name": "Eletrônicos",
+            "color": "#0000CC",
+            "is_active": 1
+        },
+        {
+            "display_number": 8,
+            "name": "Gatos",
+            "color": "#994C00",
+            "is_active": 1
+        },
+        {
+            "display_number": 9,
+            "name": "Casa & Decor",
+            "color": "#99FF99",
+            "is_active": 1
+        },
+        {
+            "display_number": 10,
+            "name": "Papelaria & Brinquedos",
+            "color": "#FFCCFF",
+            "is_active": 1
+        },
+        {
+            "display_number": 11,
+            "name": "Roupas",
+            "color": "#9933FF",
+            "is_active": 1
+        },
+        {
+            "display_number": 12,
+            "name": "Presentes",
+            "color": "#00FF80",
+            "is_active": 1
+        },
+        {
+            "display_number": 13,
+            "name": "Passeios & Viagens",
+            "color": "#009999",
+            "is_active": 1
+        },
+        {
+            "display_number": 14,
+            "name": "Baladas & Rolês",
+            "color": "#CCCC00",
+            "is_active": 1
+        },
+        {
+            "display_number": 15,
+            "name": "Terapia",
+            "color": "#660000",
+            "is_active": 1
+        },
+        {
+            "display_number": 16,
+            "name": "Maridinho ♥",
+            "color": "#FF66B2",
+            "is_active": 1
+        },
+        {
+            "display_number": 17,
+            "name": "Passagens",
+            "color": "#66FFFF",
+            "is_active": 1
+        },
+        {
+            "display_number": 18,
+            "name": "Uber",
+            "color": "#000000",
+            "is_active": 1
+        }
+    ]
+}

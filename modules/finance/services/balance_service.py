@@ -230,6 +230,34 @@ class BalanceService:
         nova_data = data + relativedelta(months=1)
         return nova_data.isoformat()
 
+    def _calcular_fim_ciclo(
+            self,
+            data_inicio: date,
+    ) -> date:
+        if data_inicio.day == 1:
+            proximo_mes = data_inicio + relativedelta(months=1)
+
+            return date.fromordinal(
+                proximo_mes.replace(day=1).toordinal() - 1
+            )
+
+        proximo_mes = data_inicio + relativedelta(months=1)
+
+        ultimo_dia_mes_destino = date.fromordinal(
+            (proximo_mes.replace(day=1) + relativedelta(months=1)).toordinal() - 1
+        ).day
+
+        dia_fim = min(
+            data_inicio.day - 1,
+            ultimo_dia_mes_destino,
+        )
+
+        return date(
+            proximo_mes.year,
+            proximo_mes.month,
+            dia_fim,
+        )
+
     def calcular_saldo_atual_conta(
             self,
             cycle_id: int,
@@ -289,15 +317,25 @@ class BalanceService:
         if ciclo_atual is None:
             raise ValueError(f"Ciclo não encontrado: {cycle_id}")
 
-        nova_data_inicio = self._adicionar_um_mes(ciclo_atual["start_date"])
-        nova_data_fim = self._adicionar_um_mes(ciclo_atual["end_date"])
+        data_fim_atual = date.fromisoformat(ciclo_atual["end_date"])
 
-        novo_nome = f"Ciclo {nova_data_inicio} até {nova_data_fim}"
+        nova_data_inicio = date.fromordinal(
+            data_fim_atual.toordinal() + 1
+        )
+
+        nova_data_fim = self._calcular_fim_ciclo(
+            nova_data_inicio
+        )
+
+        novo_nome = (
+            f"Ciclo {nova_data_inicio.isoformat()} "
+            f"até {nova_data_fim.isoformat()}"
+        )
 
         novo_cycle_id = self.repository.criar_ciclo(
             name=novo_nome,
-            start_date=nova_data_inicio,
-            end_date=nova_data_fim,
+            start_date=nova_data_inicio.isoformat(),
+            end_date=nova_data_fim.isoformat(),
             opening_balance_source="previous_cycle_real",
         )
 
