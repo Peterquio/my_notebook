@@ -376,6 +376,47 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
         REFERENCES finance_balance_accounts(id)
 );
 
+CREATE TABLE IF NOT EXISTS finance_monthly_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    template_type TEXT NOT NULL,
+
+    description TEXT NOT NULL,
+
+    estimated_amount_cents INTEGER NOT NULL DEFAULT 0,
+
+    day_of_month INTEGER NOT NULL,
+
+    account_id INTEGER,
+    category_id INTEGER,
+
+    payment_type TEXT NOT NULL DEFAULT 'bank_account',
+    credit_card_id INTEGER,
+
+    external_reference TEXT,
+
+    start_date TEXT,
+    end_date TEXT,
+
+    auto_materialize INTEGER NOT NULL DEFAULT 1,
+
+    is_active INTEGER NOT NULL DEFAULT 1,
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id),
+
+    FOREIGN KEY (category_id)
+        REFERENCES finance_categories(id),
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id)
+);
+
 CREATE TABLE IF NOT EXISTS finance_balance_commitments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
