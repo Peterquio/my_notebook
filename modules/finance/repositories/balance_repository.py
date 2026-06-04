@@ -71,6 +71,7 @@ class BalanceRepository:
             account_id: int | None = None,
             is_recurring: bool = False,
             notes: str | None = None,
+            external_reference: str | None = None,
     ) -> int:
         cursor = self.conexao.cursor()
 
@@ -79,6 +80,7 @@ class BalanceRepository:
             INSERT INTO finance_balance_income_entries (
                 cycle_id,
                 account_id,
+                external_reference,
                 description,
                 expected_amount_cents,
                 expected_date,
@@ -86,11 +88,12 @@ class BalanceRepository:
                 is_recurring,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, 'expected', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, 'expected', ?, ?)
             """,
             (
                 cycle_id,
                 account_id,
+                external_reference,
                 description,
                 expected_amount_cents,
                 expected_date,
@@ -674,6 +677,31 @@ class BalanceRepository:
             """
             SELECT *
             FROM finance_balance_commitments
+            WHERE external_reference = ?
+            LIMIT 1
+            """,
+            (
+                external_reference,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def buscar_receita_por_external_reference(
+            self,
+            external_reference: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_income_entries
             WHERE external_reference = ?
             LIMIT 1
             """,

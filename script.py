@@ -1,16 +1,27 @@
-from modules.finance.services.monthly_template_service import (
-    MonthlyTemplateService,
-)
+import sqlite3
 
-service = MonthlyTemplateService("default")
+DB_PATH = r"C:\dev\Outros\my_notebook\user_data\users\default.db"
 
-template_id = service.criar_template(
-    template_type="income",
-    description="Salário teste",
-    estimated_amount_cents=350000,
-    day_of_month=5,
-    account_id=1,
-)
+conexao = sqlite3.connect(DB_PATH)
+conexao.row_factory = sqlite3.Row
+cursor = conexao.cursor()
 
-print("Criado:", template_id)
-print(service.buscar_por_id(template_id))
+cursor.execute("""
+    SELECT
+        id,
+        cycle_id,
+        description,
+        expected_amount_cents,
+        due_date,
+        status,
+        is_recurring,
+        external_reference
+    FROM finance_balance_commitments
+    WHERE external_reference LIKE 'template:%'
+    ORDER BY id ASC
+""")
+
+for row in cursor.fetchall():
+    print(dict(row))
+
+conexao.close()

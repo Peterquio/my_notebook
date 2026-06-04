@@ -352,7 +352,7 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
 
     cycle_id INTEGER NOT NULL,
     account_id INTEGER,
-
+    external_reference TEXT,
     description TEXT NOT NULL,
 
     expected_amount_cents INTEGER NOT NULL DEFAULT 0,

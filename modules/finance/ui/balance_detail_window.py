@@ -24,6 +24,10 @@ from modules.finance.ui.balance_dashboard_page import (
     BalanceDashboardPage,
 )
 
+from modules.finance.ui.monthly_templates_page import (
+    MonthlyTemplatesPage,
+)
+
 class BalanceDetailWindow(QWidget):
     back_requested = Signal()
     data_changed = Signal()
@@ -144,6 +148,7 @@ class BalanceDetailWindow(QWidget):
             ("Contas", False),
             ("Receitas", False),
             ("Compromissos", False),
+            ("Modelos Mensais", False),
         ]
 
         self.sidebar_buttons = {}
@@ -175,6 +180,11 @@ class BalanceDetailWindow(QWidget):
             if texto == "Compromissos":
                 botao.clicked.connect(
                     self._mostrar_compromissos
+                )
+
+            if texto == "Modelos Mensais":
+                botao.clicked.connect(
+                    self._mostrar_modelos_mensais
                 )
 
             layout.addWidget(botao)
@@ -327,4 +337,21 @@ class BalanceDetailWindow(QWidget):
 
         self.content_layout.addWidget(
             self.commitment_page
+        )
+
+    def _mostrar_modelos_mensais(self) -> None:
+        self._limpar_area_principal()
+        self._atualizar_botao_ativo("Modelos Mensais")
+
+        self.monthly_templates_page = MonthlyTemplatesPage(
+            username=self.username,
+            parent=self,
+        )
+
+        self.monthly_templates_page.data_changed.connect(
+            self.data_changed.emit
+        )
+
+        self.content_layout.addWidget(
+            self.monthly_templates_page
         )
