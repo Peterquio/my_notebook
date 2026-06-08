@@ -218,6 +218,23 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_invoices (
         REFERENCES finance_credit_cards(id)
 );
 
+CREATE TABLE IF NOT EXISTS finance_credit_card_import_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    credit_card_id INTEGER NOT NULL,
+
+    source_name TEXT,
+    source_file_name TEXT,
+
+    total_expenses INTEGER DEFAULT 0,
+    total_adjustments INTEGER DEFAULT 0,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id)
+);
+
 CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -239,6 +256,9 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
     
     source_type TEXT,
     source_reference TEXT,
+    
+    import_batch_id INTEGER,
+    created_by TEXT DEFAULT 'unknown',
 
     billing_date TEXT NOT NULL,
 
@@ -259,7 +279,10 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
         REFERENCES finance_credit_card_invoices(id),
 
     FOREIGN KEY (category_id)
-        REFERENCES finance_categories(id)
+        REFERENCES finance_categories(id),
+        
+    FOREIGN KEY (import_batch_id)
+        REFERENCES finance_credit_card_import_batches(id)
 );
 
 CREATE TABLE IF NOT EXISTS finance_credit_card_invoice_adjustments (

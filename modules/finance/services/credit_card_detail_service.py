@@ -634,84 +634,45 @@ class CreditCardDetailService:
         parcelas_por_numero = {
             parcela["installment_number"]: parcela
             for parcela in parcelas
+            if parcela["source_type"] != "projected_installment"
         }
 
-        menor_parcela = min(
-            parcelas,
+        menor_parcela_real = min(
+            parcelas_por_numero.values(),
             key=lambda parcela: parcela["installment_number"],
         )
 
-        primeiro_mes_year, primeiro_mes_month = self._somar_meses_competencia(
-            year=menor_parcela["invoice_year"],
-            month=menor_parcela["invoice_month"],
-            deslocamento=-(menor_parcela["installment_number"] - 1),
+        data_menor_parcela_real = date.fromisoformat(
+            menor_parcela_real["effective_purchase_date"]
         )
 
-        quantidade_por_competencia = {}
-
-        for parcela in parcelas:
-            competencia = (
-                parcela["invoice_year"],
-                parcela["invoice_month"],
-            )
-
-            quantidade_por_competencia[competencia] = (
-                quantidade_por_competencia.get(competencia, 0) + 1
-            )
-
-        competencias_planejadas = []
-        competencia_atual = (
-            primeiro_mes_year,
-            primeiro_mes_month,
+        data_primeira_parcela = self._somar_meses(
+            data_menor_parcela_real,
+            -(menor_parcela_real["installment_number"] - 1),
         )
 
-        while len(competencias_planejadas) < installment_total:
-            quantidade_no_mes = max(
-                quantidade_por_competencia.get(competencia_atual, 0),
-                1,
-            )
-
-            for _ in range(quantidade_no_mes):
-                competencias_planejadas.append(competencia_atual)
-
-                if len(competencias_planejadas) >= installment_total:
-                    break
-
-            competencia_atual = self._somar_meses_competencia(
-                year=competencia_atual[0],
-                month=competencia_atual[1],
-                deslocamento=1,
-            )
-
-        base = parcelas[0]
+        base = menor_parcela_real
 
         for numero_parcela in range(1, installment_total + 1):
-            invoice_year, invoice_month = competencias_planejadas[
-                numero_parcela - 1
-            ]
-
-            closing_date = self.invoice_service.montar_data_segura(
-                invoice_year,
-                invoice_month,
-                credit_card["closing_day"],
+            effective_purchase_date = self._somar_meses(
+                data_primeira_parcela,
+                numero_parcela - 1,
             )
 
-            invoice_id = self._obter_ou_criar_fatura_por_mes(
+            invoice_id, closing_date = self._obter_ou_criar_fatura_por_data(
                 credit_card=credit_card,
-                invoice_year=invoice_year,
-                invoice_month=invoice_month,
+                purchase_date=effective_purchase_date,
             )
 
             parcela_existente = parcelas_por_numero.get(numero_parcela)
 
             if parcela_existente:
-                if parcela_existente["source_type"] == "projected_installment":
-                    self.expense_repository.atualizar_parcela(
-                        expense_id=parcela_existente["id"],
-                        invoice_id=invoice_id,
-                        effective_purchase_date=closing_date.isoformat(),
-                    )
+                continue
 
+            if self.expense_repository.fatura_possui_importacao_csv(
+                    credit_card_id=credit_card["id"],
+                    invoice_id=invoice_id,
+            ):
                 continue
 
             self.expense_repository.criar_lancamento(
@@ -719,15 +680,20 @@ class CreditCardDetailService:
                 invoice_id=invoice_id,
                 category_id=base["category_id"],
                 effective_description=base["effective_description"],
-                effective_purchase_date=closing_date.isoformat(),
+                effective_purchase_date=effective_purchase_date.isoformat(),
                 billing_date=closing_date.isoformat(),
                 installment_number=numero_parcela,
                 installment_total=installment_total,
                 installment_group_id=installment_group_id,
                 effective_amount_cents=base["effective_amount_cents"],
+                import_batch_id=None,
+                created_by="reconcile_installment",
                 notes="Parcela projetada automaticamente",
                 original_description=base["original_description"],
-                original_purchase_date=closing_date.isoformat(),
+                original_purchase_date=(
+                    base["original_purchase_date"]
+                    or base["effective_purchase_date"]
+                ),
                 original_amount_cents=base["effective_amount_cents"],
                 source_type="projected_installment",
                 source_reference=installment_group_id,

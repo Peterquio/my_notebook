@@ -23,6 +23,10 @@ from modules.finance.services.credit_card_detail_service import (
     CreditCardDetailService,
 )
 
+from modules.finance.repositories.credit_card_import_batch_repository import (
+    CreditCardImportBatchRepository,
+)
+
 class CreditCardImportService:
     def __init__(
             self,
@@ -35,6 +39,9 @@ class CreditCardImportService:
         self.invoice_service = CreditCardInvoiceService()
         self.adjustment_repository = CreditCardInvoiceAdjustmentRepository(username)
         self.detail_service = CreditCardDetailService(username)
+        self.import_batch_repository = (
+            CreditCardImportBatchRepository(username)
+        )
 
     def importar_preview(
             self,
@@ -62,6 +69,34 @@ class CreditCardImportService:
             credit_card: dict,
             expense: ImportedCreditCardExpense,
     ) -> str:
+        parcela_1_data = self.detail_service._somar_meses(
+            expense.purchase_date,
+            -(expense.installment_number - 1),
+        )
+
+        descricao_normalizada = (
+            expense.description
+            .strip()
+            .lower()
+        )
+
+        competencia_primeira = parcela_1_data.strftime("%Y-%m")
+
+        grupo_existente = (
+            self.expense_repository.buscar_installment_group_id_compativel(
+                credit_card_id=credit_card["id"],
+                descricao_normalizada=descricao_normalizada,
+                effective_amount_cents=expense.amount_cents,
+                installment_number=expense.installment_number,
+                installment_total=expense.installment_total,
+                competencia_primeira=competencia_primeira,
+                tolerancia_centavos=50,
+            )
+        )
+
+        if grupo_existente is not None:
+            return grupo_existente
+
         return self.detail_service.gerar_installment_group_id(
             credit_card_id=credit_card["id"],
             effective_description=expense.description,
@@ -123,6 +158,14 @@ class CreditCardImportService:
 
         total_salvo = 0
 
+        batch_id = self.import_batch_repository.criar_lote(
+            credit_card_id=credit_card["id"],
+            source_name="Nubank",
+            source_file_name="CSV Import",
+            total_expenses=len(expenses),
+            total_adjustments=0,
+        )
+
         total_por_assinatura = Counter(
             self._gerar_assinatura_importacao(expense)
             for expense in expenses
@@ -176,6 +219,7 @@ class CreditCardImportService:
                     if self._valores_proximos(
                             expense.amount_cents,
                             valor_referencia,
+                            tolerancia_centavos=2,
                     ):
                         cluster_encontrado = cluster
                         break
@@ -296,6 +340,8 @@ class CreditCardImportService:
                 installment_total=expense.installment_total,
                 effective_amount_cents=expense.amount_cents,
                 installment_group_id=installment_group_id,
+                import_batch_id=batch_id,
+                created_by="csv_import",
                 notes=f"Importado via CSV - {expense.source}",
                 original_description=expense.raw_title,
                 original_purchase_date=expense.purchase_date.isoformat(),

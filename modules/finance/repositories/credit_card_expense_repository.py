@@ -24,6 +24,8 @@ class CreditCardExpenseRepository:
             original_amount_cents: int | None = None,
             source_type: str | None = None,
             source_reference: str | None = None,
+            import_batch_id: int | None = None,
+            created_by: str | None = None,
     ) -> int:
         cursor = self.conexao.cursor()
 
@@ -53,9 +55,12 @@ class CreditCardExpenseRepository:
                 source_type,
                 source_reference,
 
+                import_batch_id,
+                created_by,
+
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 credit_card_id,
@@ -80,6 +85,9 @@ class CreditCardExpenseRepository:
 
                 source_type,
                 source_reference,
+
+                import_batch_id,
+                created_by,
 
                 notes,
             ),
@@ -430,6 +438,102 @@ class CreditCardExpenseRepository:
 
         self.conexao.commit()
 
+    def buscar_installment_group_id_compativel(
+            self,
+            credit_card_id: int,
+            descricao_normalizada: str,
+            effective_amount_cents: int,
+            installment_number: int,
+            installment_total: int,
+            competencia_primeira: str,
+            tolerancia_centavos: int = 50,
+    ) -> str | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT DISTINCT installment_group_id
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND installment_group_id IS NOT NULL
+              AND installment_total = ?
+              AND status != 'cancelled'
+            ORDER BY id ASC
+            """,
+            (
+                credit_card_id,
+                installment_total,
+            ),
+        )
+
+        melhor_group_id = None
+        menor_diferenca = None
+
+        for row in cursor.fetchall():
+            installment_group_id = row["installment_group_id"]
+
+            base_group_id = installment_group_id.split("|occurrence:", 1)[0]
+            partes = base_group_id.split("|")
+
+            if len(partes) < 5:
+                continue
+
+            try:
+                grupo_credit_card_id = int(partes[0])
+                grupo_amount_cents = int(partes[-3])
+                grupo_installment_total = int(partes[-2])
+            except ValueError:
+                continue
+
+            grupo_descricao = "|".join(partes[1:-3])
+            grupo_competencia_primeira = partes[-1]
+
+            if grupo_credit_card_id != credit_card_id:
+                continue
+
+            if grupo_descricao != descricao_normalizada:
+                continue
+
+            if grupo_installment_total != installment_total:
+                continue
+
+            if grupo_competencia_primeira != competencia_primeira:
+                continue
+
+            diferenca = abs(grupo_amount_cents - effective_amount_cents)
+
+            if diferenca > tolerancia_centavos:
+                continue
+
+            cursor_verificacao = self.conexao.cursor()
+
+            cursor_verificacao.execute(
+                """
+                SELECT 1
+                FROM finance_credit_card_expenses
+                WHERE credit_card_id = ?
+                  AND installment_group_id = ?
+                  AND installment_number = ?
+                  AND source_type != 'projected_installment'
+                  AND status != 'cancelled'
+                LIMIT 1
+                """,
+                (
+                    credit_card_id,
+                    installment_group_id,
+                    installment_number,
+                ),
+            )
+
+            if cursor_verificacao.fetchone() is not None:
+                continue
+
+            if menor_diferenca is None or diferenca < menor_diferenca:
+                menor_diferenca = diferenca
+                melhor_group_id = installment_group_id
+
+        return melhor_group_id
+
     def listar_grupos_parcelados(
             self,
             credit_card_id: int,
@@ -559,3 +663,28 @@ class CreditCardExpenseRepository:
         )
 
         self.conexao.commit()
+
+    def fatura_possui_importacao_csv(
+            self,
+            credit_card_id: int,
+            invoice_id: int,
+    ) -> bool:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT 1
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND invoice_id = ?
+              AND created_by = 'csv_import'
+              AND status != 'cancelled'
+            LIMIT 1
+            """,
+            (
+                credit_card_id,
+                invoice_id,
+            ),
+        )
+
+        return cursor.fetchone() is not None
