@@ -43,6 +43,17 @@ from modules.finance.services.credit_card_balance_sync_service import (
     CreditCardBalanceSyncService,
 )
 
+from modules.finance.services.balance_account_service import (
+    BalanceAccountService,
+)
+
+from modules.finance.services.credit_card_account_link_service import (
+    CreditCardAccountLinkService,
+)
+
+from modules.finance.ui.dialogs.credit_card_account_link_dialog import (
+    CreditCardAccountLinkDialog,
+)
 
 class CreditCardInvoicePage(QWidget):
     back_requested = Signal()
@@ -70,6 +81,14 @@ class CreditCardInvoicePage(QWidget):
             CreditCardBalanceSyncService(
                 self.username
             )
+        )
+
+        self.balance_account_service = BalanceAccountService(
+            self.username
+        )
+
+        self.account_link_service = CreditCardAccountLinkService(
+            self.username
         )
 
         self.portable_data_service = CreditCardPortableDataService(
@@ -330,6 +349,14 @@ class CreditCardInvoicePage(QWidget):
             self._exportar_dados_cartao
         )
 
+        vincular_conta = self._criar_botao_icone(
+            texto="🏦",
+            tooltip="Vincular cartão a uma conta",
+        )
+        vincular_conta.clicked.connect(
+            self._abrir_dialog_vincular_conta
+        )
+
         novo = QPushButton("+  Novo lançamento")
         novo.setFixedWidth(155)
         novo.setStyleSheet(
@@ -374,6 +401,7 @@ class CreditCardInvoicePage(QWidget):
         layout.addWidget(importar)
         layout.addWidget(importar_backup)
         layout.addWidget(exportar)
+        layout.addWidget(vincular_conta)
         layout.addWidget(ordenar)
         layout.addWidget(novo)
 
@@ -1092,4 +1120,54 @@ class CreditCardInvoicePage(QWidget):
         self._sincronizar_fatura_com_saldo()
 
         self._recarregar_tabela()
+        self.data_changed.emit()
+
+    def _abrir_dialog_vincular_conta(self) -> None:
+        contas = self.balance_account_service.listar_contas()
+
+        conta_selecionada = {}
+
+        dialog = CreditCardAccountLinkDialog(
+            accounts=contas,
+            current_account_id=self.credit_card.get("account_id"),
+            parent=self,
+        )
+
+        dialog.account_selected.connect(
+            lambda account: conta_selecionada.update(account)
+        )
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        if not conta_selecionada:
+            return
+
+        try:
+            self.account_link_service.vincular_cartao_a_conta(
+                credit_card_id=self.credit_card["id"],
+                account_id=conta_selecionada["id"],
+                sincronizar_com_saldo=True,
+                atualizar_compromissos_existentes=True,
+            )
+
+            self.credit_card["account_id"] = conta_selecionada["id"]
+            self.credit_card["sync_with_balance"] = 1
+
+            self._sincronizar_fatura_com_saldo()
+
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao vincular conta",
+                str(erro),
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Conta vinculada",
+            f"O cartão foi vinculado à conta {conta_selecionada['name']}.",
+        )
+
         self.data_changed.emit()

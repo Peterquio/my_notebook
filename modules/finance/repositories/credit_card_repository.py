@@ -149,3 +149,29 @@ class CreditCardRepository:
             dict(row)
             for row in cursor.fetchall()
         ]
+
+    def vincular_conta_saldo(
+            self,
+            credit_card_id: int,
+            account_id: int | None,
+            sync_with_balance: bool,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_cards
+            SET
+                account_id = ?,
+                sync_with_balance = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                account_id,
+                int(sync_with_balance),
+                credit_card_id,
+            ),
+        )
+
+        self.conexao.commit()

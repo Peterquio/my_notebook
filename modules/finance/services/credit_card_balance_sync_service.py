@@ -134,6 +134,8 @@ class CreditCardBalanceSyncService:
                     account_id=credit_card["account_id"],
                     credit_card_id=credit_card_id,
                     status="paid",
+                    commitment_origin="credit_card_closed",
+                    projection_type="real",
                     is_recurring=False,
                     notes="Pagamento de fatura sincronizado automaticamente pelo cartão de crédito.",
                 )
@@ -177,6 +179,8 @@ class CreditCardBalanceSyncService:
                     account_id=credit_card["account_id"],
                     credit_card_id=credit_card_id,
                     status="expected",
+                    commitment_origin="credit_card_open",
+                    projection_type="real",
                     is_recurring=False,
                     notes="Saldo em aberto da fatura sincronizado automaticamente pelo cartão de crédito.",
                 )

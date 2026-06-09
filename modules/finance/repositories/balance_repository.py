@@ -149,6 +149,8 @@ class BalanceRepository:
             notes: str | None = None,
             external_reference: str | None = None,
             status: str = "expected",
+            commitment_origin: str = "manual",
+            projection_type: str = "real",
             actual_amount_cents: int | None = None,
             paid_date: str | None = None,
     ) -> int:
@@ -167,11 +169,13 @@ class BalanceRepository:
                 account_id,
                 credit_card_id,
                 status,
+                commitment_origin,
+                projection_type,
                 is_recurring,
                 external_reference,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 cycle_id,
@@ -184,6 +188,8 @@ class BalanceRepository:
                 account_id,
                 credit_card_id,
                 status,
+                commitment_origin,
+                projection_type,
                 int(is_recurring),
                 external_reference,
                 notes,
@@ -214,6 +220,8 @@ class BalanceRepository:
                 credit_card_id,
                 external_reference,
                 status,
+                commitment_origin,
+                projection_type,
                 is_recurring,
                 notes,
                 created_at,
@@ -425,6 +433,8 @@ class BalanceRepository:
             notes: str | None = None,
             external_reference: str | None = None,
             status: str = "expected",
+            commitment_origin: str = "manual",
+            projection_type: str = "real",
             actual_amount_cents: int | None = None,
             paid_date: str | None = None,
     ) -> None:
@@ -445,6 +455,8 @@ class BalanceRepository:
                 account_id = ?,
                 credit_card_id = ?,
                 status = ?,
+                commitment_origin = ?,
+                projection_type = ?,
                 is_recurring = ?,
                 external_reference = ?,
                 notes = ?,
@@ -462,6 +474,8 @@ class BalanceRepository:
                 account_id,
                 credit_card_id,
                 status,
+                commitment_origin,
+                projection_type,
                 int(is_recurring),
                 external_reference,
                 notes,
@@ -596,6 +610,8 @@ class BalanceRepository:
                 account_id,
                 credit_card_id,
                 status,
+                commitment_origin,
+                projection_type,
                 is_recurring,
                 notes,
                 created_at,
@@ -630,6 +646,8 @@ class BalanceRepository:
             expected_amount_cents: int,
             due_date: str,
             notes: str | None = None,
+            commitment_origin: str = "credit_card_open",
+            projection_type: str = "real",
     ) -> int:
         compromisso = self.buscar_compromisso_cartao(
             cycle_id=cycle_id,
@@ -647,6 +665,8 @@ class BalanceRepository:
                 account_id=account_id,
                 credit_card_id=credit_card_id,
                 is_recurring=False,
+                commitment_origin=commitment_origin,
+                projection_type=projection_type,
                 notes=notes,
             )
 
@@ -662,6 +682,8 @@ class BalanceRepository:
             account_id=account_id,
             credit_card_id=credit_card_id,
             is_recurring=False,
+            commitment_origin=commitment_origin,
+            projection_type=projection_type,
             notes=notes,
         )
 
@@ -742,3 +764,32 @@ class BalanceRepository:
         )
 
         return compromisso["id"]
+
+    def atualizar_conta_compromissos_cartao_sincronizados(
+            self,
+            credit_card_id: int,
+            account_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        prefixo = f"cc:{credit_card_id}:%"
+
+        cursor.execute(
+            """
+            UPDATE finance_balance_commitments
+            SET
+                account_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE credit_card_id = ?
+              AND payment_type = 'credit_card'
+              AND external_reference LIKE ?
+              AND status != 'paid'
+            """,
+            (
+                account_id,
+                credit_card_id,
+                prefixo,
+            ),
+        )
+
+        self.conexao.commit()

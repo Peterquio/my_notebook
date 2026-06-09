@@ -208,7 +208,10 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_invoices (
     due_date TEXT NOT NULL,
 
     status TEXT NOT NULL DEFAULT 'open',
-
+    
+    closed_by TEXT,
+    closed_at TEXT,
+    
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
@@ -385,7 +388,10 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
     received_date TEXT,
 
     status TEXT NOT NULL DEFAULT 'expected',
-
+    
+    commitment_origin TEXT NOT NULL DEFAULT 'manual',
+    projection_type TEXT NOT NULL DEFAULT 'real',
+    
     is_recurring INTEGER NOT NULL DEFAULT 0,
     notes TEXT,
 
