@@ -71,3 +71,32 @@ class CreditCardInvoiceRepository:
         self.conexao.commit()
 
         return cursor.lastrowid
+
+    def buscar_ultima_fatura_cartao(
+            self,
+            credit_card_id: int,
+    ) -> dict | None:
+
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_invoices
+            WHERE credit_card_id = ?
+            ORDER BY
+                invoice_year DESC,
+                invoice_month DESC
+            LIMIT 1
+            """,
+            (
+                credit_card_id,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)

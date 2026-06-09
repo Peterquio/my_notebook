@@ -33,6 +33,10 @@ from modules.finance.ui.dialogs.balance_initial_cycle_dialog import (
     BalanceInitialCycleDialog,
 )
 
+from modules.finance.services.finance_balance_opening_service import (
+    FinanceBalanceOpeningService,
+)
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -70,6 +74,12 @@ class FinanceHome(BaseScreen):
 
         self.balance_service = BalanceService(
             self.username
+        )
+
+        self.finance_balance_opening_service = (
+            FinanceBalanceOpeningService(
+                self.username
+            )
         )
 
         self._garantir_onboarding_financeiro()
@@ -277,6 +287,8 @@ class FinanceHome(BaseScreen):
 
         if self.edit_mode:
             return
+
+        self.finance_balance_opening_service.preparar_abertura_saldo()
 
         self.balance_detail_page = BalanceDetailWindow(
             username=self.username,

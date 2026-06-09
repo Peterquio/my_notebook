@@ -2,6 +2,11 @@ from datetime import date
 
 from modules.finance.repositories.balance_repository import BalanceRepository
 from modules.finance.repositories.credit_card_repository import CreditCardRepository
+
+from modules.finance.repositories.credit_card_invoice_repository import (
+    CreditCardInvoiceRepository,
+)
+
 from modules.finance.services.balance_service import BalanceService
 
 from modules.finance.services.credit_card_detail_service import (
@@ -33,6 +38,10 @@ class CreditCardBalanceSyncService:
             username
         )
 
+        self.invoice_repository = CreditCardInvoiceRepository(
+            username
+        )
+
         self.detail_service = CreditCardDetailService(
             username
         )
@@ -48,6 +57,7 @@ class CreditCardBalanceSyncService:
             credit_card_id: int,
             invoice_year: int,
             invoice_month: int,
+            sync_mode: str = "open",
     ) -> list[int]:
         credit_card = self._buscar_cartao_por_id(
             credit_card_id
@@ -159,6 +169,18 @@ class CreditCardBalanceSyncService:
             f"open"
         )
 
+        commitment_origin = (
+            "credit_card_open"
+            if sync_mode == "open"
+            else "credit_card_projected"
+        )
+
+        projection_type = (
+            "real"
+            if sync_mode == "open"
+            else "projected"
+        )
+
         if valor_a_pagar_cents > 0:
             description = (
                 f"Fatura {credit_card['name']} "
@@ -179,8 +201,8 @@ class CreditCardBalanceSyncService:
                     account_id=credit_card["account_id"],
                     credit_card_id=credit_card_id,
                     status="expected",
-                    commitment_origin="credit_card_open",
-                    projection_type="real",
+                    commitment_origin=commitment_origin,
+                    projection_type=projection_type,
                     is_recurring=False,
                     notes="Saldo em aberto da fatura sincronizado automaticamente pelo cartão de crédito.",
                 )
@@ -193,6 +215,72 @@ class CreditCardBalanceSyncService:
             self._excluir_compromisso_por_external_reference(
                 external_reference_open
             )
+
+        return compromisso_ids
+
+    def sincronizar_todos_cartoes_para_saldo(
+            self,
+    ) -> list[int]:
+        hoje = date.today()
+        compromisso_ids = []
+
+        for cartao in self.credit_card_repository.listar_cartoes_ativos():
+            if cartao["sync_with_balance"] != 1:
+                continue
+
+            if cartao["account_id"] is None:
+                continue
+
+            ultima_fatura = (
+                self.invoice_repository.buscar_ultima_fatura_cartao(
+                    cartao["id"]
+                )
+            )
+
+            if ultima_fatura is None:
+                continue
+
+            ano_atual = hoje.year
+            mes_atual = hoje.month
+
+            ano_final = int(ultima_fatura["invoice_year"])
+            mes_final = int(ultima_fatura["invoice_month"])
+
+            ano = ano_atual
+            mes = mes_atual
+
+            while (
+                    ano < ano_final
+                    or (
+                            ano == ano_final
+                            and mes <= mes_final
+                    )
+            ):
+                sync_mode = (
+                    "open"
+                    if (
+                            ano == ano_atual
+                            and mes == mes_atual
+                    )
+                    else "projection"
+                )
+
+                ids_criados = self.sincronizar_fatura_com_saldo(
+                    credit_card_id=cartao["id"],
+                    invoice_year=ano,
+                    invoice_month=mes,
+                    sync_mode=sync_mode,
+                )
+
+                compromisso_ids.extend(
+                    ids_criados
+                )
+
+                if mes == 12:
+                    ano += 1
+                    mes = 1
+                else:
+                    mes += 1
 
         return compromisso_ids
 
