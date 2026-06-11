@@ -28,6 +28,10 @@ from modules.finance.ui.monthly_templates_page import (
     MonthlyTemplatesPage,
 )
 
+from modules.finance.ui.balance_timeline_page import (
+    BalanceTimelinePage,
+)
+
 class BalanceDetailWindow(QWidget):
     back_requested = Signal()
     data_changed = Signal()
@@ -145,6 +149,7 @@ class BalanceDetailWindow(QWidget):
 
         botoes = [
             ("Dashboard", True),
+            ("Timeline", False),
             ("Contas", False),
             ("Receitas", False),
             ("Compromissos", False),
@@ -185,6 +190,11 @@ class BalanceDetailWindow(QWidget):
             if texto == "Modelos Mensais":
                 botao.clicked.connect(
                     self._mostrar_modelos_mensais
+                )
+
+            if texto == "Timeline":
+                botao.clicked.connect(
+                    self._mostrar_timeline
                 )
 
             layout.addWidget(botao)
@@ -354,4 +364,17 @@ class BalanceDetailWindow(QWidget):
 
         self.content_layout.addWidget(
             self.monthly_templates_page
+        )
+
+    def _mostrar_timeline(self) -> None:
+        self._limpar_area_principal()
+        self._atualizar_botao_ativo("Timeline")
+
+        self.timeline_page = BalanceTimelinePage(
+            username=self.username,
+            parent=self,
+        )
+
+        self.content_layout.addWidget(
+            self.timeline_page
         )

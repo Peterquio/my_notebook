@@ -235,20 +235,19 @@ class BalanceAccountsPage(QWidget):
 
         dados = dialog.obter_dados()
 
-        opening_balance_cents = dados.pop(
-            "opening_balance_cents",
-            0,
-        )
-
         account_id = self.account_service.criar_conta(
             **dados
+        )
+
+        opening_balance_cents = dados.get(
+            "opening_balance_cents",
+            0,
         )
 
         self._definir_saldo_inicial_conta(
             account_id=account_id,
             opening_balance_cents=opening_balance_cents,
         )
-
         self._carregar_contas()
         self.data_changed.emit()
 
@@ -258,11 +257,16 @@ class BalanceAccountsPage(QWidget):
             opening_balance_cents: int,
     ) -> None:
 
-        if self.selected_cycle_id is None:
+        if not self.cycles:
             return
 
+        primeiro_ciclo = sorted(
+            self.cycles,
+            key=lambda ciclo: ciclo["start_date"],
+        )[0]
+
         self.account_service.definir_saldo_inicial_conta(
-            cycle_id=self.selected_cycle_id,
+            cycle_id=primeiro_ciclo["id"],
             account_id=account_id,
             opening_balance_cents=opening_balance_cents,
         )

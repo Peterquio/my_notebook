@@ -793,3 +793,83 @@ class BalanceRepository:
         )
 
         self.conexao.commit()
+
+    def listar_receitas_periodo(
+            self,
+            start_date: str,
+            end_date: str,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_income_entries
+            WHERE expected_date BETWEEN ? AND ?
+            ORDER BY expected_date ASC, id ASC
+            """,
+            (
+                start_date,
+                end_date,
+            ),
+        )
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def listar_compromissos_periodo(
+            self,
+            start_date: str,
+            end_date: str,
+    ) -> list[dict]:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_commitments
+            WHERE due_date BETWEEN ? AND ?
+            ORDER BY due_date ASC, id ASC
+            """,
+            (
+                start_date,
+                end_date,
+            ),
+        )
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def buscar_ciclo_por_data(
+            self,
+            data_iso: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                name,
+                start_date,
+                end_date,
+                opening_balance_source,
+                is_active,
+                created_at,
+                updated_at
+            FROM finance_balance_cycles
+            WHERE is_active = 1
+              AND start_date <= ?
+              AND end_date >= ?
+            LIMIT 1
+            """,
+            (
+                data_iso,
+                data_iso,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)

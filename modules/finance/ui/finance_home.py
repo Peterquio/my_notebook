@@ -37,6 +37,10 @@ from modules.finance.services.finance_balance_opening_service import (
     FinanceBalanceOpeningService,
 )
 
+from modules.finance.repositories.finance_settings_repository import (
+    FinanceSettingsRepository,
+)
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -117,6 +121,12 @@ class FinanceHome(BaseScreen):
             return
 
         dados = cycle_dialog.obter_dados()
+
+        FinanceSettingsRepository(
+            self.username
+        ).salvar_reference_day(
+            dados["reference_day"]
+        )
 
         self.balance_service.criar_ciclo(
             name=dados["name"],

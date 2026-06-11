@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     theme TEXT DEFAULT 'default',
     theme_mode TEXT DEFAULT 'dark',
     language TEXT DEFAULT 'pt-BR',
+    finance_reference_day INTEGER DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -337,6 +338,25 @@ CREATE TABLE IF NOT EXISTS finance_balance_accounts (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS finance_balance_account_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    account_id INTEGER NOT NULL,
+
+    snapshot_date TEXT NOT NULL,
+
+    balance_cents INTEGER NOT NULL,
+
+    snapshot_type TEXT NOT NULL DEFAULT 'manual',
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id)
+);
+
 CREATE TABLE IF NOT EXISTS finance_balance_cycles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -467,6 +487,9 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
     external_reference TEXT,
 
     status TEXT NOT NULL DEFAULT 'expected',
+
+    commitment_origin TEXT NOT NULL DEFAULT 'manual',
+    projection_type TEXT NOT NULL DEFAULT 'real',
 
     is_recurring INTEGER NOT NULL DEFAULT 0,
     notes TEXT,

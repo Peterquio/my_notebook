@@ -1,11 +1,16 @@
+from datetime import date
 from modules.finance.repositories.balance_account_repository import (
     BalanceAccountRepository,
 )
 
+from modules.finance.repositories.balance_account_snapshot_repository import (
+    BalanceAccountSnapshotRepository,
+)
 
 class BalanceAccountService:
     def __init__(self, username: str) -> None:
         self.repository = BalanceAccountRepository(username)
+        self.snapshot_repository = BalanceAccountSnapshotRepository(username)
 
     def criar_conta(
             self,
@@ -18,8 +23,10 @@ class BalanceAccountService:
             account_kind: str | None = None,
             include_in_global_balance: bool = True,
             is_investment: bool = False,
+            opening_balance_cents: int = 0,
+            snapshot_date: str | None = None,
     ) -> int:
-        return self.repository.criar_conta(
+        account_id = self.repository.criar_conta(
             name=name,
             account_type=account_type,
             institution_name=institution_name,
@@ -30,6 +37,16 @@ class BalanceAccountService:
             include_in_global_balance=include_in_global_balance,
             is_investment=is_investment,
         )
+
+        self.snapshot_repository.criar_snapshot(
+            account_id=account_id,
+            snapshot_date=snapshot_date or date.today().isoformat(),
+            balance_cents=opening_balance_cents,
+            snapshot_type="initial",
+            notes="Snapshot inicial criado no cadastro da conta.",
+        )
+
+        return account_id
 
     def listar_contas(self) -> list[dict]:
         return self.repository.listar_contas_ativas()

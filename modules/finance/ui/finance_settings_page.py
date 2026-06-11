@@ -6,6 +6,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QFrame,
+    QSpinBox,
+)
+
+from modules.finance.repositories.finance_settings_repository import (
+    FinanceSettingsRepository,
 )
 
 from modules.finance.ui.dialogs.finance_category_manager_dialog import (
@@ -22,8 +27,12 @@ class FinanceSettingsPage(QWidget):
         super().__init__(parent)
 
         self.username = username
-
+        self.settings_repository = FinanceSettingsRepository(
+            username
+        )
         self._montar_interface()
+
+
 
     def _montar_interface(self) -> None:
         layout = QVBoxLayout(self)
@@ -51,6 +60,10 @@ class FinanceSettingsPage(QWidget):
 
         layout.addWidget(
             self._criar_card_categorias()
+        )
+
+        layout.addWidget(
+            self._criar_card_periodo_financeiro()
         )
 
         layout.addStretch()
@@ -126,3 +139,67 @@ class FinanceSettingsPage(QWidget):
         )
 
         dialog.exec()
+
+    def _criar_card_periodo_financeiro(self) -> QFrame:
+        card = QFrame()
+
+        card.setStyleSheet(
+            """
+            QFrame {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 16px;
+            }
+            """
+        )
+
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 18, 18, 18)
+
+        textos = QVBoxLayout()
+
+        titulo = QLabel("Período Financeiro")
+
+        titulo.setStyleSheet(
+            """
+            font-size: 16px;
+            font-weight: bold;
+            color: #0f172a;
+            """
+        )
+
+        descricao = QLabel(
+            "Defina o dia de referência utilizado para organizar "
+            "timeline, relatórios e períodos financeiros."
+        )
+
+        descricao.setStyleSheet(
+            "font-size: 12px; color: #64748b;"
+        )
+
+        textos.addWidget(titulo)
+        textos.addWidget(descricao)
+
+        self.reference_day_input = QSpinBox()
+        self.reference_day_input.setRange(1, 31)
+
+        self.reference_day_input.setValue(
+            self.settings_repository.obter_reference_day()
+        )
+
+        salvar = QPushButton("Salvar")
+        salvar.setFixedWidth(120)
+        salvar.clicked.connect(
+            self._salvar_reference_day
+        )
+
+        layout.addLayout(textos, 1)
+        layout.addWidget(self.reference_day_input)
+        layout.addWidget(salvar)
+
+        return card
+
+    def _salvar_reference_day(self) -> None:
+        self.settings_repository.salvar_reference_day(
+            self.reference_day_input.value()
+        )

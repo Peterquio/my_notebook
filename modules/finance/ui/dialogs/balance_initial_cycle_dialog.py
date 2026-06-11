@@ -254,4 +254,5 @@ class BalanceInitialCycleDialog(QDialog):
             ),
             "start_date": data_inicio.isoformat(),
             "end_date": data_fim.isoformat(),
+            "reference_day": self.start_day_input.value(),
         }

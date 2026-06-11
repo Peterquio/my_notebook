@@ -96,9 +96,12 @@ class CreditCardBalanceSyncService:
             due_day=credit_card["due_day"],
         )
 
-        cycle = self._obter_ou_criar_ciclo_por_data(
+        cycle = self._obter_ciclo_por_data(
             due_date
         )
+
+        if cycle is None:
+            return []
 
         compromisso_ids = []
         referencias_pagamentos_atuais = set()
@@ -246,6 +249,16 @@ class CreditCardBalanceSyncService:
             ano_final = int(ultima_fatura["invoice_year"])
             mes_final = int(ultima_fatura["invoice_month"])
 
+            data_final_vencimento = self._calcular_data_vencimento(
+                invoice_year=ano_final,
+                invoice_month=mes_final,
+                due_day=cartao["due_day"],
+            )
+
+            self.balance_service.garantir_ciclos_ate_data(
+                data_final_vencimento
+            )
+
             ano = ano_atual
             mes = mes_atual
 
@@ -349,53 +362,13 @@ class CreditCardBalanceSyncService:
 
         return None
 
-    def _obter_ou_criar_ciclo_por_data(
+    def _obter_ciclo_por_data(
             self,
             data_iso: str,
-    ) -> dict:
-        ciclo = self._encontrar_ciclo_por_data(
+    ) -> dict | None:
+        return self._encontrar_ciclo_por_data(
             data_iso
         )
-
-        if ciclo is not None:
-            return ciclo
-
-        ciclos = self.balance_repository.listar_ciclos_ativos()
-
-        if not ciclos:
-            raise ValueError(
-                "Nenhum ciclo financeiro foi criado ainda. "
-                "Crie o primeiro ciclo no módulo Saldo antes de sincronizar faturas."
-            )
-
-        ciclos_ordenados = sorted(
-            ciclos,
-            key=lambda item: item["start_date"],
-        )
-
-        ultimo_ciclo = ciclos_ordenados[-1]
-
-        data_referencia = date.fromisoformat(
-            data_iso
-        )
-
-        while data_referencia > date.fromisoformat(ultimo_ciclo["end_date"]):
-            novo_cycle_id = self.balance_service.gerar_proximo_ciclo_real(
-                ultimo_ciclo["id"]
-            )
-
-            novo_ciclo = self.balance_repository.buscar_ciclo_por_id(
-                novo_cycle_id
-            )
-
-            if novo_ciclo is None:
-                raise ValueError(
-                    "O ciclo financeiro foi criado, mas não pôde ser carregado."
-                )
-
-            ultimo_ciclo = novo_ciclo
-
-        return ultimo_ciclo
 
     def _calcular_fim_proximo_ciclo(
             self,

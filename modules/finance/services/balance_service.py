@@ -2,11 +2,74 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from modules.finance.repositories.balance_repository import BalanceRepository
 from modules.finance.repositories.balance_account_repository import BalanceAccountRepository
+from modules.finance.repositories.balance_account_snapshot_repository import BalanceAccountSnapshotRepository
 
 class BalanceService:
     def __init__(self, username: str) -> None:
         self.repository = BalanceRepository(username)
         self.account_repository = BalanceAccountRepository(username)
+        self.snapshot_repository = BalanceAccountSnapshotRepository(username)
+
+    def calcular_saldo_conta_na_data(
+            self,
+            account_id: int,
+            data_iso: str,
+    ) -> int:
+        snapshot = self.snapshot_repository.buscar_snapshot_mais_recente_ate_data(
+            account_id=account_id,
+            data_iso=data_iso,
+        )
+
+        if snapshot is None:
+            saldo = 0
+            data_inicio = "0001-01-01"
+        else:
+            saldo = snapshot["balance_cents"]
+            data_inicio = snapshot["snapshot_date"]
+
+        receitas = self.repository.listar_receitas_periodo(
+            start_date=data_inicio,
+            end_date=data_iso,
+        )
+
+        for receita in receitas:
+            if receita["account_id"] != account_id:
+                continue
+
+            if receita["expected_date"] <= data_inicio:
+                continue
+
+            valor = (
+                receita["actual_amount_cents"]
+                if receita["status"] == "received"
+                and receita["actual_amount_cents"] is not None
+                else receita["expected_amount_cents"]
+            )
+
+            saldo += valor
+
+        compromissos = self.repository.listar_compromissos_periodo(
+            start_date=data_inicio,
+            end_date=data_iso,
+        )
+
+        for compromisso in compromissos:
+            if compromisso["account_id"] != account_id:
+                continue
+
+            if compromisso["due_date"] <= data_inicio:
+                continue
+
+            valor = (
+                compromisso["actual_amount_cents"]
+                if compromisso["status"] == "paid"
+                and compromisso["actual_amount_cents"] is not None
+                else compromisso["expected_amount_cents"]
+            )
+
+            saldo -= valor
+
+        return saldo
 
     def calcular_saldo_inicial_global(
             self,
@@ -143,6 +206,8 @@ class BalanceService:
         return {
             "cycle_id": cycle_id,
             "saldo_inicial_cents": saldo_inicial,
+            "saldo_inicio_ciclo_cents": saldo_inicial,
+            "saldo_final_estimado_cents": saldo_previsto,
             "receitas_recebidas_cents": receitas_recebidas,
             "receitas_previstas_cents": receitas_previstas,
             "compromissos_pagos_cents": compromissos_pagos,
@@ -308,6 +373,79 @@ class BalanceService:
 
         return saldo_inicial + receitas_recebidas - compromissos_pagos
 
+    def recalcular_saldos_abertura_ciclos_futuros(
+            self,
+    ) -> None:
+        ciclos = self.repository.listar_ciclos_ativos()
+
+        ciclos_ordenados = sorted(
+            ciclos,
+            key=lambda ciclo: ciclo["start_date"],
+        )
+
+        if len(ciclos_ordenados) <= 1:
+            return
+
+        for index in range(1, len(ciclos_ordenados)):
+            ciclo_anterior = ciclos_ordenados[index - 1]
+            ciclo_atual = ciclos_ordenados[index]
+
+            saldos_anteriores = (
+                self.account_repository.listar_saldos_iniciais_ciclo(
+                    ciclo_anterior["id"]
+                )
+            )
+
+            for saldo in saldos_anteriores:
+                account_id = saldo["account_id"]
+
+                saldo_previsto_conta = self.calcular_saldo_previsto_conta(
+                    cycle_id=ciclo_anterior["id"],
+                    account_id=account_id,
+                )
+
+                self.account_repository.definir_saldo_inicial_conta(
+                    cycle_id=ciclo_atual["id"],
+                    account_id=account_id,
+                    opening_balance_cents=saldo_previsto_conta,
+                )
+
+    def garantir_ciclos_ate_data(
+            self,
+            data_final_iso: str,
+    ) -> None:
+        ciclos = self.repository.listar_ciclos_ativos()
+
+        if not ciclos:
+            return
+
+        ciclos_ordenados = sorted(
+            ciclos,
+            key=lambda ciclo: ciclo["start_date"],
+        )
+
+        ultimo_ciclo = ciclos_ordenados[-1]
+
+        data_final = date.fromisoformat(
+            data_final_iso
+        )
+
+        while data_final > date.fromisoformat(ultimo_ciclo["end_date"]):
+            novo_cycle_id = self.gerar_proximo_ciclo_real(
+                ultimo_ciclo["id"]
+            )
+
+            novo_ciclo = self.repository.buscar_ciclo_por_id(
+                novo_cycle_id
+            )
+
+            if novo_ciclo is None:
+                raise ValueError(
+                    "O ciclo financeiro foi criado, mas não pôde ser carregado."
+                )
+
+            ultimo_ciclo = novo_ciclo
+
     def gerar_proximo_ciclo_real(
             self,
             cycle_id: int,
@@ -344,7 +482,7 @@ class BalanceService:
         for saldo in saldos_anteriores:
             account_id = saldo["account_id"]
 
-            saldo_real_conta = self.calcular_saldo_atual_conta(
+            saldo_real_conta = self.calcular_saldo_previsto_conta(
                 cycle_id=cycle_id,
                 account_id=account_id,
             )
@@ -544,6 +682,74 @@ class BalanceService:
             cycle_id
         )
 
+    def listar_eventos_periodo(
+            self,
+            start_date: str,
+            end_date: str,
+    ) -> list[dict]:
+
+        receitas = self.repository.listar_receitas_periodo(
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        compromissos = self.repository.listar_compromissos_periodo(
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        eventos = []
+
+        for receita in receitas:
+            eventos.append(
+                {
+                    "kind": "income",
+                    "date": receita["received_date"] or receita["expected_date"],
+                    "description": receita["description"],
+                    "amount_cents": (
+                        receita["actual_amount_cents"]
+                        if receita["status"] == "received"
+                        and receita["actual_amount_cents"] is not None
+                        else receita["expected_amount_cents"]
+                    ),
+                    "status": receita["status"],
+                    "account_id": receita["account_id"],
+                    "projection_type": "real",
+                }
+            )
+
+        for compromisso in compromissos:
+            eventos.append(
+                {
+                    "kind": "commitment",
+                    "date": compromisso["paid_date"] or compromisso["due_date"],
+                    "description": compromisso["description"],
+                    "amount_cents": (
+                        compromisso["actual_amount_cents"]
+                        if compromisso["status"] == "paid"
+                        and compromisso["actual_amount_cents"] is not None
+                        else compromisso["expected_amount_cents"]
+                    ),
+                    "status": compromisso["status"],
+                    "account_id": compromisso["account_id"],
+                    "payment_type": compromisso["payment_type"],
+                    "projection_type": compromisso.get(
+                        "projection_type",
+                        "real",
+                    ),
+                }
+            )
+
+        eventos.sort(
+            key=lambda evento: (
+                evento["date"],
+                0 if evento["kind"] == "income" else 1,
+                evento["description"].lower(),
+            )
+        )
+
+        return eventos
+
     def atualizar_compromisso(
             self,
             compromisso_id: int,
@@ -650,3 +856,107 @@ class BalanceService:
             end_date=end_date,
             opening_balance_source=opening_balance_source,
         )
+
+    def obter_resumo_periodo(
+            self,
+            start_date: str,
+            end_date: str,
+    ) -> dict:
+        saldo_inicial_periodo = self.calcular_saldo_global_na_data(
+            self._obter_dia_anterior(start_date)
+        )
+        receitas = self.repository.listar_receitas_periodo(
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        compromissos = self.repository.listar_compromissos_periodo(
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        receitas_recebidas = 0
+        receitas_previstas = 0
+
+        for receita in receitas:
+            if receita["status"] == "received":
+                receitas_recebidas += (
+                    receita["actual_amount_cents"]
+                    if receita["actual_amount_cents"] is not None
+                    else receita["expected_amount_cents"]
+                )
+            else:
+                receitas_previstas += receita["expected_amount_cents"]
+
+        compromissos_pagos = 0
+        compromissos_previstos = 0
+
+        for compromisso in compromissos:
+            if compromisso["status"] == "paid":
+                compromissos_pagos += (
+                    compromisso["actual_amount_cents"]
+                    if compromisso["actual_amount_cents"] is not None
+                    else compromisso["expected_amount_cents"]
+                )
+            else:
+                compromissos_previstos += compromisso["expected_amount_cents"]
+
+        saldo_movimentado_real = (
+                receitas_recebidas
+                - compromissos_pagos
+        )
+
+        saldo_movimentado_previsto = (
+                receitas_previstas
+                - compromissos_previstos
+        )
+
+        saldo_final_estimado = (
+                saldo_inicial_periodo
+                + saldo_movimentado_real
+                + saldo_movimentado_previsto
+        )
+
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "saldo_inicial_periodo_cents": saldo_inicial_periodo,
+            "receitas_recebidas_cents": receitas_recebidas,
+            "receitas_previstas_cents": receitas_previstas,
+            "compromissos_pagos_cents": compromissos_pagos,
+            "compromissos_previstos_cents": compromissos_previstos,
+            "saldo_movimentado_real_cents": saldo_movimentado_real,
+            "saldo_movimentado_previsto_cents": saldo_movimentado_previsto,
+            "saldo_final_estimado_cents": saldo_final_estimado,
+        }
+
+    def calcular_saldo_global_na_data(
+            self,
+            data_iso: str,
+    ) -> int:
+        contas = self.account_repository.listar_contas_ativas()
+
+        total = 0
+
+        for conta in contas:
+            if conta["include_in_global_balance"] != 1:
+                continue
+
+            if conta["is_investment"] == 1:
+                continue
+
+            total += self.calcular_saldo_conta_na_data(
+                account_id=conta["id"],
+                data_iso=data_iso,
+            )
+
+        return total
+
+    def _obter_dia_anterior(
+            self,
+            data_iso: str,
+    ) -> str:
+        return (
+                date.fromisoformat(data_iso)
+                + relativedelta(days=-1)
+        ).isoformat()
