@@ -1,9 +1,25 @@
+from datetime import date
+
+from dateutil.relativedelta import relativedelta
+
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
-    QComboBox, QGridLayout, QHBoxLayout, QLabel,
-    QFrame, QVBoxLayout, QWidget
+    QCalendarWidget,
+    QDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from modules.finance.services.balance_service import BalanceService
+
+from modules.finance.repositories.finance_settings_repository import (
+    FinanceSettingsRepository,
+)
 
 
 class BalanceDashboardPage(QWidget):
@@ -12,12 +28,13 @@ class BalanceDashboardPage(QWidget):
 
         self.username = username
         self.balance_service = BalanceService(self.username)
+        self.settings_repository = FinanceSettingsRepository(self.username)
 
-        self.cycles = []
-        self.selected_cycle_id = None
+        self.start_date_iso = None
+        self.end_date_iso = None
 
         self._montar_interface()
-        self._carregar_ciclos()
+        self._carregar_periodo_padrao()
 
     def _montar_interface(self) -> None:
         layout = QVBoxLayout(self)
@@ -31,16 +48,15 @@ class BalanceDashboardPage(QWidget):
             "font-size: 22px; font-weight: bold; color: #0f172a;"
         )
 
-        self.cycle_combo = QComboBox()
-        self.cycle_combo.setFixedWidth(260)
-        self.cycle_combo.currentIndexChanged.connect(self._alterar_ciclo)
-
         header.addWidget(titulo)
         header.addStretch()
-        header.addWidget(QLabel("Ciclo"))
-        header.addWidget(self.cycle_combo)
 
         layout.addLayout(header)
+
+        self.periodo_container = QVBoxLayout()
+        self.periodo_container.setSpacing(8)
+
+        layout.addLayout(self.periodo_container)
 
         self.cards_layout = QGridLayout()
         self.cards_layout.setSpacing(12)
@@ -48,75 +64,83 @@ class BalanceDashboardPage(QWidget):
         layout.addLayout(self.cards_layout)
         layout.addStretch()
 
-    def _carregar_ciclos(self) -> None:
-        self.cycles = self.balance_service.listar_ciclos()
+    def _carregar_periodo_padrao(self) -> None:
+        inicio, fim = self._obter_periodo_padrao()
 
-        self.cycle_combo.blockSignals(True)
-        self.cycle_combo.clear()
+        self.start_date_iso = inicio
+        self.end_date_iso = fim
 
-        for ciclo in self.cycles:
-            texto = (
-                f"{self._formatar_data(ciclo['start_date'])}"
-                f" → "
-                f"{self._formatar_data(ciclo['end_date'])}"
-            )
-            self.cycle_combo.addItem(texto, ciclo["id"])
-
-        self.selected_cycle_id = self.cycle_combo.currentData()
-        self.cycle_combo.blockSignals(False)
-
-        self._carregar_resumo()
-
-    def _alterar_ciclo(self) -> None:
-        self.selected_cycle_id = self.cycle_combo.currentData()
         self._carregar_resumo()
 
     def _carregar_resumo(self) -> None:
+        self._limpar_periodo()
         self._limpar_cards()
 
-        if self.selected_cycle_id is None:
+        if self.start_date_iso is None or self.end_date_iso is None:
             return
 
-        resumo = self.balance_service.obter_resumo_ciclo(
-            self.selected_cycle_id
+        barra_periodo = self._criar_barra_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+        )
+
+        self.periodo_container.addWidget(barra_periodo)
+
+        resumo = self.balance_service.obter_resumo_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+        )
+
+        receitas_total = (
+            resumo["receitas_recebidas_cents"]
+            + resumo["receitas_previstas_cents"]
+        )
+
+        compromissos_total = (
+            resumo["compromissos_pagos_cents"]
+            + resumo["compromissos_previstos_cents"]
         )
 
         cards = [
             (
-                "Saldo Atual",
-                self._formatar_moeda(resumo["saldo_atual_cents"]),
-                "Dinheiro real disponível",
+                "Saldo Inicial",
+                resumo["saldo_inicial_periodo_cents"],
+                "Saldo no começo do período",
             ),
             (
-                "Saldo Previsto",
-                self._formatar_moeda(resumo["saldo_previsto_cents"]),
-                "Saldo atual + previstos",
+                "Saldo Final Estimado",
+                resumo["saldo_final_estimado_cents"],
+                "Saldo após reais e previstos",
             ),
             (
-                "Receitas Recebidas",
-                self._formatar_moeda(resumo["receitas_recebidas_cents"]),
-                "Já confirmadas",
+                "Movimentação Real",
+                resumo["saldo_movimentado_real_cents"],
+                "Recebidos menos pagos",
             ),
             (
-                "Receitas Previstas",
-                self._formatar_moeda(resumo["receitas_previstas_cents"]),
-                "Ainda não recebidas",
+                "Movimentação Prevista",
+                resumo["saldo_movimentado_previsto_cents"],
+                "Previstos menos pendentes",
             ),
             (
-                "Compromissos Pagos",
-                self._formatar_moeda(resumo["compromissos_pagos_cents"]),
-                "Já pagos",
+                "Receitas do Período",
+                receitas_total,
+                "Recebidas + previstas",
             ),
             (
-                "Compromissos Previstos",
-                self._formatar_moeda(resumo["compromissos_previstos_cents"]),
-                "Ainda não pagos",
+                "Saídas do Período",
+                compromissos_total,
+                "Pagas + previstas",
             ),
         ]
 
-        for index, (titulo, valor, subtitulo) in enumerate(cards):
+        for index, (titulo, valor_cents, subtitulo) in enumerate(cards):
             self.cards_layout.addWidget(
-                self._criar_card(titulo, valor, subtitulo),
+                self._criar_card(
+                    titulo=titulo,
+                    valor_cents=valor_cents,
+                    subtitulo=subtitulo,
+                ),
                 index // 3,
                 index % 3,
             )
@@ -124,11 +148,13 @@ class BalanceDashboardPage(QWidget):
     def _criar_card(
             self,
             titulo: str,
-            valor: str,
+            valor_cents: int,
             subtitulo: str,
     ) -> QFrame:
+        cor_valor = self._obter_cor_valor(valor_cents)
+
         card = QFrame()
-        card.setMinimumHeight(110)
+        card.setMinimumHeight(116)
         card.setStyleSheet(
             """
             QFrame {
@@ -145,22 +171,38 @@ class BalanceDashboardPage(QWidget):
 
         titulo_label = QLabel(titulo)
         titulo_label.setStyleSheet(
-            "border: none; font-size: 12px; color: #64748b;"
+            """
+            QLabel {
+                border: none;
+                font-size: 12px;
+                color: #64748b;
+            }
+            """
         )
 
-        valor_label = QLabel(valor)
+        valor_label = QLabel(
+            self._formatar_moeda(valor_cents)
+        )
         valor_label.setStyleSheet(
-            """
-            border: none;
-            font-size: 24px;
-            font-weight: bold;
-            color: #0f172a;
+            f"""
+            QLabel {{
+                border: none;
+                font-size: 24px;
+                font-weight: bold;
+                color: {cor_valor};
+            }}
             """
         )
 
         subtitulo_label = QLabel(subtitulo)
         subtitulo_label.setStyleSheet(
-            "border: none; font-size: 11px; color: #94a3b8;"
+            """
+            QLabel {
+                border: none;
+                font-size: 11px;
+                color: #94a3b8;
+            }
+            """
         )
 
         layout.addWidget(titulo_label)
@@ -170,6 +212,161 @@ class BalanceDashboardPage(QWidget):
 
         return card
 
+    def _criar_barra_periodo(
+            self,
+            start_date: str,
+            end_date: str,
+    ) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            """
+            QFrame {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 16px;
+            }
+            """
+        )
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(8)
+
+        barra = QFrame()
+        barra.setFixedHeight(8)
+        barra.setStyleSheet(
+            """
+            QFrame {
+                border: none;
+                border-radius: 4px;
+                background: qlineargradient(
+                    x1: 0, y1: 0,
+                    x2: 1, y2: 0,
+                    stop: 0 #22c55e,
+                    stop: 1 #ef4444
+                );
+            }
+            """
+        )
+
+        datas_layout = QHBoxLayout()
+        datas_layout.setContentsMargins(0, 0, 0, 0)
+
+        inicio = QLabel(
+            f"Início\n{self._formatar_data(start_date)}"
+        )
+        inicio.setCursor(Qt.PointingHandCursor)
+        inicio.mousePressEvent = lambda event: self._abrir_calendario_periodo(
+            campo="inicio"
+        )
+        inicio.setStyleSheet(
+            """
+            QLabel {
+                border: none;
+                color: #15803d;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            """
+        )
+
+        fim = QLabel(
+            f"Fim\n{self._formatar_data(end_date)}"
+        )
+        fim.setAlignment(Qt.AlignRight)
+        fim.setCursor(Qt.PointingHandCursor)
+        fim.mousePressEvent = lambda event: self._abrir_calendario_periodo(
+            campo="fim"
+        )
+        fim.setStyleSheet(
+            """
+            QLabel {
+                border: none;
+                color: #be123c;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            """
+        )
+
+        datas_layout.addWidget(inicio)
+        datas_layout.addStretch()
+        datas_layout.addWidget(fim)
+
+        layout.addWidget(barra)
+        layout.addLayout(datas_layout)
+
+        return card
+
+    def _abrir_calendario_periodo(
+            self,
+            campo: str,
+    ) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            "Selecionar data inicial"
+            if campo == "inicio"
+            else "Selecionar data final"
+        )
+        dialog.setModal(True)
+        dialog.setMinimumWidth(320)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        calendario = QCalendarWidget()
+        calendario.setGridVisible(True)
+
+        data_atual = (
+            self.start_date_iso
+            if campo == "inicio"
+            else self.end_date_iso
+        )
+
+        if data_atual is not None:
+            calendario.setSelectedDate(
+                QDate.fromString(
+                    data_atual,
+                    "yyyy-MM-dd",
+                )
+            )
+
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+
+        cancelar = QPushButton("Cancelar")
+        cancelar.clicked.connect(dialog.reject)
+
+        aplicar = QPushButton("Aplicar")
+        aplicar.clicked.connect(dialog.accept)
+
+        botoes.addWidget(cancelar)
+        botoes.addWidget(aplicar)
+
+        layout.addWidget(calendario)
+        layout.addLayout(botoes)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        nova_data = calendario.selectedDate().toPython().isoformat()
+
+        if campo == "inicio":
+            self.start_date_iso = nova_data
+        else:
+            self.end_date_iso = nova_data
+
+        self._carregar_resumo()
+
+    def _limpar_periodo(self) -> None:
+        while self.periodo_container.count():
+            item = self.periodo_container.takeAt(0)
+            widget = item.widget()
+
+            if widget:
+                widget.deleteLater()
+
     def _limpar_cards(self) -> None:
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
@@ -177,6 +374,56 @@ class BalanceDashboardPage(QWidget):
 
             if widget:
                 widget.deleteLater()
+
+    def _obter_periodo_padrao(self) -> tuple[str, str]:
+        reference_day = self.settings_repository.obter_reference_day()
+
+        hoje = date.today()
+
+        if hoje.day >= reference_day:
+            inicio = hoje.replace(
+                day=reference_day
+            )
+        else:
+            inicio = (
+                hoje.replace(day=1)
+                + relativedelta(months=-1)
+            )
+
+            ultimo_dia = (
+                inicio
+                + relativedelta(day=31)
+            ).day
+
+            inicio = inicio.replace(
+                day=min(
+                    reference_day,
+                    ultimo_dia,
+                )
+            )
+
+        fim = (
+            inicio
+            + relativedelta(months=1)
+            + relativedelta(days=-1)
+        )
+
+        return (
+            inicio.isoformat(),
+            fim.isoformat(),
+        )
+
+    def _obter_cor_valor(
+            self,
+            valor_cents: int,
+    ) -> str:
+        if valor_cents > 0:
+            return "#15803d"
+
+        if valor_cents < 0:
+            return "#be123c"
+
+        return "#1d4ed8"
 
     def _formatar_moeda(self, valor_cents: int) -> str:
         valor = valor_cents / 100
