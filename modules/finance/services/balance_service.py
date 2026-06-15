@@ -863,7 +863,7 @@ class BalanceService:
             end_date: str,
     ) -> dict:
         saldo_inicial_periodo = self.calcular_saldo_global_na_data(
-            self._obter_dia_anterior(start_date)
+            start_date
         )
         receitas = self.repository.listar_receitas_periodo(
             start_date=start_date,
@@ -911,10 +911,8 @@ class BalanceService:
                 - compromissos_previstos
         )
 
-        saldo_final_estimado = (
-                saldo_inicial_periodo
-                + saldo_movimentado_real
-                + saldo_movimentado_previsto
+        saldo_final_estimado = self.calcular_saldo_global_na_data(
+            end_date
         )
 
         return {

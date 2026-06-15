@@ -62,7 +62,10 @@ class CreditCardCsvImportHandler:
                 newline="",
         ) as arquivo:
             reader = csv.DictReader(arquivo)
-            headers = reader.fieldnames or []
+            headers = [
+                h.strip().lower()
+                for h in (reader.fieldnames or [])
+            ]
 
             sample_rows = []
 

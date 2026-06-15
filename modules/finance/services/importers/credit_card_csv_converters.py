@@ -39,11 +39,11 @@ class NubankCsvConverter:
             sample_rows: list[dict],
     ) -> bool:
 
-        return set(headers) == {
+        return {
             "date",
             "title",
             "amount",
-        }
+        }.issubset(set(headers))
 
     def convert(
             self,
@@ -122,7 +122,18 @@ class NubankCsvConverter:
             amount_text: str,
     ) -> int:
 
-        valor = Decimal(amount_text).quantize(
+        texto = str(amount_text).strip()
+
+        texto = (
+            texto
+            .replace("R$", "")
+            .replace(" ", "")
+            .replace(".", "")
+            .replace(",", ".")
+            .strip()
+        )
+
+        valor = Decimal(texto).quantize(
             Decimal("0.01"),
             rounding=ROUND_HALF_UP,
         )
@@ -139,7 +150,7 @@ class NubankCsvConverter:
         with open(
                 csv_path,
                 mode="r",
-                encoding="utf-8",
+                encoding="utf-8-sig",
                 newline="",
         ) as arquivo:
             reader = csv.DictReader(arquivo)
