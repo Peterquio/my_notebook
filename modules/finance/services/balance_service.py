@@ -71,6 +71,170 @@ class BalanceService:
 
         return saldo
 
+    def calcular_saldo_conta_estimado_reverso(
+            self,
+            account_id: int,
+            data_iso: str,
+            snapshot: dict,
+    ) -> int:
+        snapshot_date = snapshot["snapshot_date"]
+
+        saldo = snapshot["balance_cents"]
+
+        receitas = self.repository.listar_receitas_periodo(
+            start_date=data_iso,
+            end_date=snapshot_date,
+        )
+
+        for receita in receitas:
+            if receita["account_id"] != account_id:
+                continue
+
+            data_evento = (
+                receita["received_date"]
+                or receita["expected_date"]
+            )
+
+            if data_evento >= snapshot_date:
+                continue
+
+            valor = (
+                receita["actual_amount_cents"]
+                if receita["status"] == "received"
+                and receita["actual_amount_cents"] is not None
+                else receita["expected_amount_cents"]
+            )
+
+            saldo -= valor
+
+        compromissos = self.repository.listar_compromissos_periodo(
+            start_date=data_iso,
+            end_date=snapshot_date,
+        )
+
+        for compromisso in compromissos:
+            if compromisso["account_id"] != account_id:
+                continue
+
+            data_evento = (
+                compromisso["paid_date"]
+                or compromisso["due_date"]
+            )
+
+            if data_evento >= snapshot_date:
+                continue
+
+            valor = (
+                compromisso["actual_amount_cents"]
+                if compromisso["status"] == "paid"
+                and compromisso["actual_amount_cents"] is not None
+                else compromisso["expected_amount_cents"]
+            )
+
+            saldo += valor
+
+        return saldo
+
+    def obter_saldo_inicial_timeline(
+            self,
+            data_iso: str,
+    ) -> dict:
+        contas = self.account_repository.listar_contas_ativas()
+
+        total = 0
+        possui_estimativa = False
+        contas_estimadas = []
+        primeiro_snapshot_futuro_date = None
+
+        for conta in contas:
+            if conta["include_in_global_balance"] != 1:
+                continue
+
+            if conta["is_investment"] == 1:
+                continue
+
+            snapshot_anterior = (
+                self.snapshot_repository.buscar_snapshot_mais_recente_ate_data(
+                    account_id=conta["id"],
+                    data_iso=data_iso,
+                )
+            )
+
+            if snapshot_anterior is not None:
+                total += self.calcular_saldo_conta_na_data(
+                    account_id=conta["id"],
+                    data_iso=data_iso,
+                )
+                continue
+
+            snapshot_futuro = (
+                self.snapshot_repository.buscar_primeiro_snapshot_apos_data(
+                    account_id=conta["id"],
+                    data_iso=data_iso,
+                )
+            )
+
+            if snapshot_futuro is None:
+                possui_estimativa = True
+                continue
+
+            saldo_estimado = self.calcular_saldo_conta_estimado_reverso(
+                account_id=conta["id"],
+                data_iso=data_iso,
+                snapshot=snapshot_futuro,
+            )
+
+            total += saldo_estimado
+            possui_estimativa = True
+
+            contas_estimadas.append(
+                {
+                    "account_id": conta["id"],
+                    "account_name": conta["name"],
+                    "balance_cents": saldo_estimado,
+                    "source_snapshot_id": snapshot_futuro["id"],
+                    "source_snapshot_date": snapshot_futuro["snapshot_date"],
+                }
+            )
+
+            if primeiro_snapshot_futuro_date is None:
+                primeiro_snapshot_futuro_date = snapshot_futuro["snapshot_date"]
+            elif snapshot_futuro["snapshot_date"] < primeiro_snapshot_futuro_date:
+                primeiro_snapshot_futuro_date = snapshot_futuro["snapshot_date"]
+
+        return {
+            "balance_cents": total,
+            "is_estimated": possui_estimativa,
+            "estimated_accounts": contas_estimadas,
+            "first_future_snapshot_date": primeiro_snapshot_futuro_date,
+        }
+
+    def fixar_saldo_estimado_na_data(
+            self,
+            data_iso: str,
+    ) -> list[int]:
+        saldo_timeline = self.obter_saldo_inicial_timeline(
+            data_iso
+        )
+
+        snapshot_ids = []
+
+        for conta_estimativa in saldo_timeline["estimated_accounts"]:
+            snapshot_id = self.snapshot_repository.criar_snapshot(
+                account_id=conta_estimativa["account_id"],
+                snapshot_date=data_iso,
+                balance_cents=conta_estimativa["balance_cents"],
+                snapshot_type="anchored",
+                notes=(
+                    "Snapshot criado a partir de estimativa reversa "
+                    "confirmada pelo usuário."
+                ),
+            )
+
+            snapshot_ids.append(snapshot_id)
+
+        return snapshot_ids
+
     def calcular_saldo_inicial_global(
             self,
             cycle_id: int,
@@ -862,9 +1026,11 @@ class BalanceService:
             start_date: str,
             end_date: str,
     ) -> dict:
-        saldo_inicial_periodo = self.calcular_saldo_global_na_data(
+        saldo_timeline = self.obter_saldo_inicial_timeline(
             start_date
         )
+        saldo_inicial_periodo = saldo_timeline["balance_cents"]
+
         receitas = self.repository.listar_receitas_periodo(
             start_date=start_date,
             end_date=end_date,
@@ -919,6 +1085,9 @@ class BalanceService:
             "start_date": start_date,
             "end_date": end_date,
             "saldo_inicial_periodo_cents": saldo_inicial_periodo,
+            "saldo_inicial_estimado": saldo_timeline["is_estimated"],
+            "saldo_inicial_contas_estimadas": saldo_timeline["estimated_accounts"],
+            "primeiro_snapshot_futuro_date": saldo_timeline["first_future_snapshot_date"],
             "receitas_recebidas_cents": receitas_recebidas,
             "receitas_previstas_cents": receitas_previstas,
             "compromissos_pagos_cents": compromissos_pagos,

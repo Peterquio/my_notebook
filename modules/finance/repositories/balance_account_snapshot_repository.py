@@ -88,3 +88,32 @@ class BalanceAccountSnapshotRepository:
         )
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def buscar_primeiro_snapshot_apos_data(
+            self,
+            account_id: int,
+            data_iso: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_balance_account_snapshots
+            WHERE account_id = ?
+              AND snapshot_date > ?
+            ORDER BY snapshot_date ASC, id ASC
+            LIMIT 1
+            """,
+            (
+                account_id,
+                data_iso,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)

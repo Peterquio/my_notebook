@@ -113,11 +113,23 @@ class BalanceTimelinePage(QWidget):
             barra_periodo,
         )
 
+        tipo_card_inicial = (
+            "estimado"
+            if resumo.get("saldo_inicial_estimado")
+            else "inicio"
+        )
+
+        titulo_card_inicial = (
+            "Saldo estimado do período"
+            if resumo.get("saldo_inicial_estimado")
+            else "Saldo inicial do período"
+        )
+
         card_inicial = self._criar_card_saldo_periodo(
-            titulo="Saldo inicial do período",
+            titulo=titulo_card_inicial,
             data=start_date,
             valor_cents=saldo_acumulado,
-            tipo="inicio",
+            tipo=tipo_card_inicial,
         )
 
         self.cards_layout.insertWidget(
@@ -126,6 +138,14 @@ class BalanceTimelinePage(QWidget):
         )
 
         for evento in eventos:
+            primeiro_snapshot_futuro_date = resumo.get(
+                "primeiro_snapshot_futuro_date"
+            )
+
+            evento["balance_is_estimated"] = (
+                primeiro_snapshot_futuro_date is not None
+                and evento["date"] < primeiro_snapshot_futuro_date
+            )
             if evento["kind"] == "income":
                 saldo_acumulado += evento["amount_cents"]
             else:
@@ -159,7 +179,12 @@ class BalanceTimelinePage(QWidget):
             valor_cents: int,
             tipo: str,
     ) -> QFrame:
-        if valor_cents > 0:
+        if tipo == "estimado":
+            cor_fundo = "#faf5ff"
+            cor_borda = "#d8b4fe"
+            cor_titulo = "#a21caf"
+            simbolo = "◆"
+        elif valor_cents > 0:
             cor_fundo = "#ecfdf5"
             cor_borda = "#86efac"
             cor_titulo = "#15803d"
@@ -229,6 +254,34 @@ class BalanceTimelinePage(QWidget):
         layout.addWidget(titulo_label)
         layout.addWidget(data_label)
         layout.addWidget(valor_label)
+
+        if tipo == "estimado":
+            botao = QPushButton("Fixar saldo nesta data")
+            botao.setCursor(Qt.PointingHandCursor)
+            botao.clicked.connect(
+                lambda checked=False, current_date=data: (
+                    self._fixar_saldo_estimado(current_date)
+                )
+            )
+            botao.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #a21caf;
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    padding: 9px 14px;
+                    margin-top: 8px;
+                }
+
+                QPushButton:hover {
+                    background-color: #86198f;
+                }
+                """
+            )
+
+            layout.addWidget(botao)
 
         return card
 
@@ -327,8 +380,18 @@ class BalanceTimelinePage(QWidget):
         is_income = evento["kind"] == "income"
         is_done = evento["status"] in ["received", "paid"]
         is_projected = evento.get("projection_type") == "projected"
+        is_estimated_balance = evento.get("balance_is_estimated") is True
 
-        if is_income and is_done:
+        if is_estimated_balance:
+            cor_fundo = "#faf5ff"
+            cor_borda = "#d8b4fe"
+            cor_titulo = "#a21caf"
+
+            if is_income:
+                tipo_texto = "Entrada em trecho estimado"
+            else:
+                tipo_texto = "Saída em trecho estimado"
+        elif is_income and is_done:
             cor_fundo = "#dcfce7"
             cor_borda = "#86efac"
             cor_titulo = "#15803d"
@@ -422,8 +485,14 @@ class BalanceTimelinePage(QWidget):
             evento.get("balance_after_cents", 0)
         )
 
+        texto_saldo = (
+            "Saldo estimado após evento"
+            if evento.get("balance_is_estimated") is True
+            else "Saldo após evento"
+        )
+
         detalhe = QLabel(
-            f"Conta: {conta} • Saldo após evento: {saldo_apos}"
+            f"Conta: {conta} • {texto_saldo}: {saldo_apos}"
         )
 
         detalhe.setStyleSheet(
@@ -465,6 +534,18 @@ class BalanceTimelinePage(QWidget):
                 return account["name"]
 
         return "Conta não encontrada"
+
+    def _fixar_saldo_estimado(
+            self,
+            data_iso: str,
+    ) -> None:
+        self.balance_service.fixar_saldo_estimado_na_data(
+            data_iso
+        )
+
+        self.accounts = self.account_service.listar_contas()
+
+        self._carregar_timeline()
 
     def _formatar_moeda(
             self,
