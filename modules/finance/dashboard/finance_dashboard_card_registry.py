@@ -3,6 +3,11 @@ from modules.finance.dashboard.finance_dashboard_card_handlers import (
     CreditCardFinanceDashboardCardHandler,
 )
 
+from modules.finance.dashboard.finance_dashboard_card_handlers import (
+    GenericFinanceDashboardCardHandler,
+    CreditCardFinanceDashboardCardHandler,
+    AccountBalanceFinanceDashboardCardHandler,
+)
 
 class FinanceDashboardCardRegistry:
     def __init__(
@@ -24,6 +29,11 @@ class FinanceDashboardCardRegistry:
                 credit_card_service=credit_card_service,
                 username=username,
             )
+
+        self.handlers["account_balance"] = AccountBalanceFinanceDashboardCardHandler(
+            card_generator=card_generator,
+            username=username,
+        )
 
     def get_handler(
             self,

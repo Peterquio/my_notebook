@@ -1,6 +1,21 @@
 import uuid
 from PySide6.QtWidgets import QDialog
+from datetime import date
+from dateutil.relativedelta import relativedelta
+
 from modules.finance.ui.credit_card_setup_dialog import CreditCardSetupDialog
+
+from modules.finance.ui.dialogs.balance_account_dialog import (
+    BalanceAccountDialog,
+)
+
+from modules.finance.services.balance_service import (
+    BalanceService,
+)
+
+from modules.finance.repositories.finance_settings_repository import (
+    FinanceSettingsRepository,
+)
 
 from modules.finance.services.balance_account_service import (
     BalanceAccountService,
@@ -148,3 +163,127 @@ class CreditCardFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
         )
 
         return card_data
+
+class AccountBalanceFinanceDashboardCardHandler(GenericFinanceDashboardCardHandler):
+    def __init__(
+            self,
+            card_generator,
+            username: str,
+    ) -> None:
+
+        super().__init__(
+            card_generator
+        )
+
+        self.username = username
+        self.account_service = BalanceAccountService(
+            username
+        )
+        self.balance_service = BalanceService(
+            username
+        )
+
+    def create_new_card_data(
+            self,
+            template_data: dict,
+    ) -> dict | None:
+
+        card_data = super().create_new_card_data(
+            template_data
+        )
+
+        dialog = BalanceAccountDialog()
+
+        if dialog.exec() != QDialog.Accepted:
+            return None
+
+        dados = dialog.obter_dados()
+
+        account_id = self.account_service.criar_conta(
+            name=dados["name"],
+            account_type=dados["account_type"],
+            institution_name=dados["institution_name"],
+            bank_preset_key=dados["bank_preset_key"],
+            agency=dados["agency"],
+            account_number=dados["account_number"],
+            account_kind=dados["account_kind"],
+            include_in_global_balance=dados["include_in_global_balance"],
+            is_investment=dados["is_investment"],
+            opening_balance_cents=dados["opening_balance_cents"],
+        )
+
+        card_data["config"] = {
+            "account_id": account_id,
+        }
+
+        return card_data
+
+    def hydrate_card_data(
+            self,
+            layout_item: dict,
+            template_data: dict,
+    ) -> dict:
+
+        card_data = super().hydrate_card_data(
+            layout_item,
+            template_data,
+        )
+
+        config = card_data.get("config", {})
+        account_id = config.get("account_id")
+
+        if not account_id:
+            return card_data
+
+        conta = self.account_service.buscar_conta(
+            account_id
+        )
+
+        if conta is None:
+            return card_data
+
+        hoje = date.today().isoformat()
+        _, end_date = self._obter_periodo_financeiro_padrao()
+
+        card_data["config"].update(
+            {
+                "account_id": conta["id"],
+                "name": conta["name"],
+                "account_type": conta["account_type"],
+                "institution_name": conta["institution_name"],
+                "bank_preset_key": conta["bank_preset_key"],
+                "agency": conta["agency"],
+                "account_number": conta["account_number"],
+                "account_kind": conta["account_kind"],
+                "current_balance_cents": self.balance_service.calcular_saldo_conta_na_data(
+                    account_id=conta["id"],
+                    data_iso=hoje,
+                ),
+                "projected_balance_cents": self.balance_service.calcular_saldo_conta_na_data(
+                    account_id=conta["id"],
+                    data_iso=end_date,
+                ),
+                "projected_date": end_date,
+                "pix_scheduled_count": 0,
+            }
+        )
+
+        return card_data
+
+    def _obter_periodo_financeiro_padrao(self) -> tuple[str, str]:
+        reference_day = FinanceSettingsRepository(
+            self.username
+        ).obter_reference_day()
+
+        hoje = date.today()
+
+        if hoje.day >= reference_day:
+            inicio = hoje.replace(day=reference_day)
+        else:
+            inicio = hoje.replace(day=1) + relativedelta(months=-1)
+            ultimo_dia = (inicio + relativedelta(day=31)).day
+            inicio = inicio.replace(day=min(reference_day, ultimo_dia))
+
+        fim = inicio + relativedelta(months=1) - relativedelta(days=1)
+
+        return inicio.isoformat(), fim.isoformat()

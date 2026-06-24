@@ -7,7 +7,7 @@ FINANCE_CARD_CATALOG = [
     },
     {
         "id": "account_balance",
-        "title": "Saldo da Conta",
+        "title": "Conta Bancária",
         "size": "2x1",
         "icon": "🏦",
     },
