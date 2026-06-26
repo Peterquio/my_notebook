@@ -209,6 +209,73 @@ class BalanceService:
             "first_future_snapshot_date": primeiro_snapshot_futuro_date,
         }
 
+    def obter_saldo_inicial_conta_timeline(
+            self,
+            account_id: int,
+            data_iso: str,
+    ) -> dict:
+        snapshot_anterior = (
+            self.snapshot_repository.buscar_snapshot_mais_recente_ate_data(
+                account_id=account_id,
+                data_iso=data_iso,
+            )
+        )
+
+        if snapshot_anterior is not None:
+            return {
+                "balance_cents": self.calcular_saldo_conta_na_data(
+                    account_id=account_id,
+                    data_iso=data_iso,
+                ),
+                "is_estimated": False,
+                "estimated_accounts": [],
+                "first_future_snapshot_date": None,
+            }
+
+        snapshot_futuro = (
+            self.snapshot_repository.buscar_primeiro_snapshot_apos_data(
+                account_id=account_id,
+                data_iso=data_iso,
+            )
+        )
+
+        if snapshot_futuro is None:
+            return {
+                "balance_cents": 0,
+                "is_estimated": True,
+                "estimated_accounts": [],
+                "first_future_snapshot_date": None,
+            }
+
+        saldo_estimado = self.calcular_saldo_conta_estimado_reverso(
+            account_id=account_id,
+            data_iso=data_iso,
+            snapshot=snapshot_futuro,
+        )
+
+        conta = self.account_repository.buscar_conta_por_id(
+            account_id
+        )
+
+        return {
+            "balance_cents": saldo_estimado,
+            "is_estimated": True,
+            "estimated_accounts": [
+                {
+                    "account_id": account_id,
+                    "account_name": (
+                        conta["name"]
+                        if conta
+                        else f"Conta #{account_id}"
+                    ),
+                    "balance_cents": saldo_estimado,
+                    "source_snapshot_id": snapshot_futuro["id"],
+                    "source_snapshot_date": snapshot_futuro["snapshot_date"],
+                }
+            ],
+            "first_future_snapshot_date": snapshot_futuro["snapshot_date"],
+        }
+
     def fixar_saldo_estimado_na_data(
             self,
             data_iso: str,
@@ -1037,10 +1104,17 @@ class BalanceService:
             self,
             start_date: str,
             end_date: str,
+            account_id: int | None = None,
     ) -> dict:
-        saldo_timeline = self.obter_saldo_inicial_timeline(
-            start_date
-        )
+        if account_id is None:
+            saldo_timeline = self.obter_saldo_inicial_timeline(
+                start_date
+            )
+        else:
+            saldo_timeline = self.obter_saldo_inicial_conta_timeline(
+                account_id=account_id,
+                data_iso=start_date,
+            )
         saldo_inicial_periodo = saldo_timeline["balance_cents"]
 
         receitas = self.repository.listar_receitas_periodo(
@@ -1057,6 +1131,11 @@ class BalanceService:
         receitas_previstas = 0
 
         for receita in receitas:
+            if (
+                    account_id is not None
+                    and receita["account_id"] != account_id
+            ):
+                continue
             if receita["status"] == "received":
                 receitas_recebidas += (
                     receita["actual_amount_cents"]
@@ -1070,6 +1149,11 @@ class BalanceService:
         compromissos_previstos = 0
 
         for compromisso in compromissos:
+            if (
+                    account_id is not None
+                    and compromisso["account_id"] != account_id
+            ):
+                continue
             if compromisso["status"] == "paid":
                 compromissos_pagos += (
                     compromisso["actual_amount_cents"]
@@ -1089,9 +1173,15 @@ class BalanceService:
                 - compromissos_previstos
         )
 
-        saldo_final_estimado = self.calcular_saldo_global_na_data(
-            end_date
-        )
+        if account_id is None:
+            saldo_final_estimado = self.calcular_saldo_global_na_data(
+                end_date
+            )
+        else:
+            saldo_final_estimado = self.calcular_saldo_conta_na_data(
+                account_id=account_id,
+                data_iso=end_date,
+            )
 
         return {
             "start_date": start_date,

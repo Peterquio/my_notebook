@@ -1,6 +1,6 @@
 from datetime import date
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtWidgets import (
     QWidget,
     QFrame,
@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QGridLayout,
+    QCalendarWidget,
+    QDialog,
 )
 
 from modules.finance.services.balance_service import (
@@ -21,6 +23,9 @@ from modules.finance.repositories.finance_settings_repository import (
 
 from dateutil.relativedelta import relativedelta
 
+from modules.finance.ui.widget.balance_timeline_widget import (
+    BalanceTimelineWidget,
+)
 
 class AccountDashboardPage(QWidget):
     back_requested = Signal()
@@ -40,6 +45,8 @@ class AccountDashboardPage(QWidget):
         self.balance_service = BalanceService(
             self.username
         )
+        self.start_date_iso = self._obter_inicio_periodo()
+        self.end_date_iso = self._obter_fim_periodo()
 
         self._montar_interface()
 
@@ -56,10 +63,22 @@ class AccountDashboardPage(QWidget):
             self._criar_cards_resumo()
         )
 
+        self.timeline = BalanceTimelineWidget()
+
+        self.timeline.on_period_start_clicked = (
+            lambda: self._abrir_calendario_periodo("inicio")
+        )
+
+        self.timeline.on_period_end_clicked = (
+            lambda: self._abrir_calendario_periodo("fim")
+        )
+
         layout.addWidget(
-            self._criar_timeline_placeholder(),
+            self.timeline,
             1,
         )
+
+        self._carregar_timeline()
 
     def _criar_header(self) -> QHBoxLayout:
         layout = QHBoxLayout()
@@ -286,6 +305,24 @@ class AccountDashboardPage(QWidget):
 
         return card
 
+    def _obter_inicio_periodo(self) -> str:
+        reference_day = FinanceSettingsRepository(
+            self.username
+        ).obter_reference_day()
+
+        hoje = date.today()
+
+        if hoje.day >= reference_day:
+            inicio = hoje.replace(day=reference_day)
+        else:
+            inicio = hoje.replace(day=1) + relativedelta(months=-1)
+            ultimo_dia = (inicio + relativedelta(day=31)).day
+            inicio = inicio.replace(
+                day=min(reference_day, ultimo_dia)
+            )
+
+        return inicio.isoformat()
+
     def _obter_fim_periodo(self) -> str:
         reference_day = FinanceSettingsRepository(
             self.username
@@ -332,3 +369,84 @@ class AccountDashboardPage(QWidget):
             return data_iso
 
         return f"{partes[2]}/{partes[1]}/{partes[0]}"
+
+    def _carregar_timeline(self) -> None:
+        eventos = self.balance_service.listar_eventos_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+            account_id=self.account["id"],
+        )
+
+        resumo = self.balance_service.obter_resumo_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+            account_id=self.account["id"],
+        )
+
+        self.timeline.renderizar(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+            eventos=eventos,
+            resumo=resumo,
+            accounts=[self.account],
+        )
+
+    def _abrir_calendario_periodo(
+            self,
+            campo: str,
+    ) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            "Selecionar data inicial"
+            if campo == "inicio"
+            else "Selecionar data final"
+        )
+        dialog.setModal(True)
+        dialog.setMinimumWidth(320)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        calendario = QCalendarWidget()
+        calendario.setGridVisible(True)
+
+        data_atual = (
+            self.start_date_iso
+            if campo == "inicio"
+            else self.end_date_iso
+        )
+
+        calendario.setSelectedDate(
+            QDate.fromString(
+                data_atual,
+                "yyyy-MM-dd",
+            )
+        )
+
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+
+        cancelar = QPushButton("Cancelar")
+        cancelar.clicked.connect(dialog.reject)
+
+        aplicar = QPushButton("Aplicar")
+        aplicar.clicked.connect(dialog.accept)
+
+        botoes.addWidget(cancelar)
+        botoes.addWidget(aplicar)
+
+        layout.addWidget(calendario)
+        layout.addLayout(botoes)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        nova_data = calendario.selectedDate().toPython().isoformat()
+
+        if campo == "inicio":
+            self.start_date_iso = nova_data
+        else:
+            self.end_date_iso = nova_data
+
+        self._carregar_timeline()
