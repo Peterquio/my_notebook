@@ -3,10 +3,10 @@ from PySide6.QtWidgets import QDialog
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-from modules.finance.ui.credit_card_setup_dialog import CreditCardSetupDialog
+from modules.finance.ui.dialogs.credit_card_setup_dialog import CreditCardSetupDialog
 
-from modules.finance.ui.dialogs.balance_account_dialog import (
-    BalanceAccountDialog,
+from modules.finance.ui.dialogs.bank_account_setup_dialog import (
+    BankAccountSetupDialog,
 )
 
 from modules.finance.services.balance_service import (
@@ -192,14 +192,15 @@ class AccountBalanceFinanceDashboardCardHandler(GenericFinanceDashboardCardHandl
             template_data
         )
 
-        dialog = BalanceAccountDialog()
+        dialog = BankAccountSetupDialog()
 
         if dialog.exec() != QDialog.Accepted:
             return None
 
         dados = dialog.obter_dados()
 
-        account_id = self.account_service.criar_conta(
+        self.account_service.criar_conta(
+            dashboard_card_id=card_data["id"],
             name=dados["name"],
             account_type=dados["account_type"],
             institution_name=dados["institution_name"],
@@ -213,7 +214,17 @@ class AccountBalanceFinanceDashboardCardHandler(GenericFinanceDashboardCardHandl
         )
 
         card_data["config"] = {
-            "account_id": account_id,
+            "name": dados["name"],
+            "account_type": dados["account_type"],
+            "institution_name": dados["institution_name"],
+            "bank_preset_key": dados["bank_preset_key"],
+            "agency": dados["agency"],
+            "account_number": dados["account_number"],
+            "account_kind": dados["account_kind"],
+            "current_balance_cents": dados["opening_balance_cents"],
+            "projected_balance_cents": dados["opening_balance_cents"],
+            "projected_date": "",
+            "pix_scheduled_count": 0,
         }
 
         return card_data
@@ -229,14 +240,8 @@ class AccountBalanceFinanceDashboardCardHandler(GenericFinanceDashboardCardHandl
             template_data,
         )
 
-        config = card_data.get("config", {})
-        account_id = config.get("account_id")
-
-        if not account_id:
-            return card_data
-
-        conta = self.account_service.buscar_conta(
-            account_id
+        conta = self.account_service.buscar_por_dashboard_card_id(
+            layout_item["card_id"]
         )
 
         if conta is None:

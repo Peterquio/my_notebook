@@ -7,13 +7,13 @@ from PySide6.QtWidgets import (
 
 class BalanceAccountDialog(QDialog):
     BANK_OPTIONS = [
-        ("Nubank", "nubank"),
-        ("Banco Inter", "inter"),
+        ("Caixa", "caixa"),
+        ("Banco do Brasil", "bb"),
         ("Itaú", "itau"),
         ("Bradesco", "bradesco"),
         ("Santander", "santander"),
-        ("Banco do Brasil", "bb"),
-        ("Caixa", "caixa"),
+        ("Nubank", "nubank"),
+        ("Banco Inter", "inter"),
         ("BTG Pactual", "btg"),
         ("XP", "xp"),
         ("PicPay", "picpay"),

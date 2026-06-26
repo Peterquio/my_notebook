@@ -17,12 +17,14 @@ class BalanceAccountRepository:
             account_kind: str | None = None,
             include_in_global_balance: bool = True,
             is_investment: bool = False,
+            dashboard_card_id: str | None = None,
     ) -> int:
         cursor = self.conexao.cursor()
 
         cursor.execute(
             """
             INSERT INTO finance_balance_accounts (
+                dashboard_card_id,
                 name,
                 account_type,
                 institution_name,
@@ -33,9 +35,10 @@ class BalanceAccountRepository:
                 include_in_global_balance,
                 is_investment
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                dashboard_card_id,
                 name,
                 account_type,
                 institution_name,
@@ -58,6 +61,7 @@ class BalanceAccountRepository:
             """
             SELECT
                 id,
+                dashboard_card_id,
                 name,
                 account_type,
                 institution_name,
@@ -88,6 +92,7 @@ class BalanceAccountRepository:
             """
             SELECT
                 id,
+                dashboard_card_id,
                 name,
                 account_type,
                 institution_name,
@@ -104,6 +109,43 @@ class BalanceAccountRepository:
             WHERE id = ?
             """,
             (account_id,),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def buscar_conta_por_dashboard_card_id(
+            self,
+            dashboard_card_id: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                dashboard_card_id,
+                name,
+                account_type,
+                institution_name,
+                bank_preset_key,
+                agency,
+                account_number,
+                account_kind,
+                include_in_global_balance,
+                is_investment,
+                is_active,
+                created_at,
+                updated_at
+            FROM finance_balance_accounts
+            WHERE dashboard_card_id = ?
+              AND is_active = 1
+            """,
+            (dashboard_card_id,),
         )
 
         row = cursor.fetchone()

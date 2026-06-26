@@ -1,25 +1,13 @@
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QFrame
+
+from modules.finance.services.bank_account_asset_resolver import (
+    BankAccountAssetResolver,
+)
 
 
 class BankAccountWidget(QFrame):
-    PRESETS = {
-        "nubank": ("#6d28d9", "#f5f3ff", "#ffffff"),
-        "inter": ("#f97316", "#fff7ed", "#ffffff"),
-        "itau": ("#ea580c", "#fff7ed", "#ffffff"),
-        "bradesco": ("#be123c", "#fff1f2", "#ffffff"),
-        "santander": ("#dc2626", "#fef2f2", "#ffffff"),
-        "bb": ("#facc15", "#172554", "#111827"),
-        "caixa": ("#2563eb", "#eff6ff", "#ffffff"),
-        "btg": ("#0f172a", "#f8fafc", "#ffffff"),
-        "xp": ("#111827", "#fef3c7", "#ffffff"),
-        "picpay": ("#16a34a", "#f0fdf4", "#ffffff"),
-        "mercado_pago": ("#38bdf8", "#ecfeff", "#082f49"),
-        "pagbank": ("#facc15", "#fefce8", "#111827"),
-        "other": ("#334155", "#f8fafc", "#ffffff"),
-    }
-
     ACCOUNT_KIND_LABELS = {
         "checking": "Conta corrente",
         "savings": "Conta poupança",
@@ -27,10 +15,12 @@ class BankAccountWidget(QFrame):
         "other": "Conta bancária",
     }
 
-    def __init__(self, card_data: dict) -> None:
-        super().__init__()
+    def __init__(self, card_data: dict, parent=None) -> None:
+        super().__init__(parent)
 
         self.card_data = card_data
+        self.asset_resolver = BankAccountAssetResolver()
+
         self.setObjectName("BankAccountWidget")
         self.setMinimumSize(280, 164)
 
@@ -41,7 +31,7 @@ class BankAccountWidget(QFrame):
 
         self.name = config.get("name") or "Conta Bancária"
         self.institution_name = config.get("institution_name") or "Banco"
-        self.bank_preset_key = config.get("bank_preset_key") or "other"
+        self.bank_preset_key = config.get("bank_preset_key") or "generic_bank"
         self.account_kind = config.get("account_kind") or "other"
         self.agency = config.get("agency")
         self.account_number = config.get("account_number")
@@ -52,10 +42,20 @@ class BankAccountWidget(QFrame):
 
         self.pix_scheduled_count = config.get("pix_scheduled_count", 0)
 
-        self.background_color, self.soft_color, self.text_color = self.PRESETS.get(
-            self.bank_preset_key,
-            self.PRESETS["other"],
+        resolved_assets = self.asset_resolver.resolver_preset(
+            self.bank_preset_key
         )
+
+        self.background_color = resolved_assets.background_color
+        self.text_color = resolved_assets.text_color
+        self.logo_path = resolved_assets.logo_path
+        self.background_path = resolved_assets.background_path
+        self.overlay_path = resolved_assets.overlay_path
+
+    def update_card_data(self, card_data: dict) -> None:
+        self.card_data = card_data
+        self._resolver_visual()
+        self.update()
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
@@ -69,7 +69,19 @@ class BankAccountWidget(QFrame):
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(rect, 22, 22)
 
+        self._draw_pixmap_cover(painter, self.background_path, rect)
+
+        if self.background_path is None:
+            self._draw_default_decoration(painter)
+
+        self._draw_pixmap_cover(painter, self.overlay_path, rect)
+
+        self._draw_logo_or_icon(painter)
+        self._draw_texts(painter)
+
+    def _draw_default_decoration(self, painter: QPainter) -> None:
         painter.setBrush(QColor(255, 255, 255, 28))
+        painter.setPen(Qt.NoPen)
         painter.drawEllipse(
             QRectF(self.width() - 92, -36, 140, 140)
         )
@@ -79,7 +91,29 @@ class BankAccountWidget(QFrame):
             QRectF(self.width() - 144, self.height() - 46, 170, 170)
         )
 
-        self._draw_texts(painter)
+    def _draw_logo_or_icon(self, painter: QPainter) -> None:
+        if self.logo_path is not None:
+            self._draw_pixmap_fit_by_height(
+                painter=painter,
+                path=self.logo_path,
+                x=18,
+                y=14,
+                height=24,
+            )
+            return
+
+        painter.setPen(QColor(self.text_color))
+
+        icon_font = QFont()
+        icon_font.setPointSize(14)
+        icon_font.setBold(True)
+
+        painter.setFont(icon_font)
+        painter.drawText(
+            QRectF(self.width() - 54, 14, 36, 22),
+            Qt.AlignRight | Qt.AlignVCenter,
+            "🏦",
+        )
 
     def _draw_texts(self, painter: QPainter) -> None:
         painter.setPen(QColor(self.text_color))
@@ -98,42 +132,50 @@ class BankAccountWidget(QFrame):
         footer_font = QFont()
         footer_font.setPointSize(8)
 
+        title_x = 18
+        title_width = self.width() - 72
+
+        if self.logo_path is not None:
+            title_x = 18
+            title_y = 42
+        else:
+            title_y = 14
+
         painter.setFont(title_font)
         painter.drawText(
-            QRectF(18, 14, self.width() - 72, 22),
+            QRectF(title_x, title_y, title_width, 22),
             Qt.AlignLeft | Qt.AlignVCenter,
             self.institution_name.upper(),
         )
 
-        painter.setFont(title_font)
-        painter.drawText(
-            QRectF(self.width() - 54, 14, 36, 22),
-            Qt.AlignRight | Qt.AlignVCenter,
-            "🏦",
-        )
-
         painter.setFont(small_font)
         painter.drawText(
-            QRectF(18, 36, self.width() - 36, 18),
+            QRectF(18, title_y + 22, self.width() - 36, 18),
             Qt.AlignLeft | Qt.AlignVCenter,
-            self.ACCOUNT_KIND_LABELS.get(self.account_kind, "Conta bancária"),
+            self.ACCOUNT_KIND_LABELS.get(
+                self.account_kind,
+                "Conta bancária",
+            ),
         )
 
         painter.setFont(balance_font)
         painter.drawText(
-            QRectF(18, 68, self.width() - 36, 32),
+            QRectF(18, 76, self.width() - 36, 32),
             Qt.AlignLeft | Qt.AlignVCenter,
             self._formatar_moeda(self.current_balance),
         )
 
         painter.setFont(small_font)
         painter.drawText(
-            QRectF(20, 98, self.width() - 36, 18),
+            QRectF(20, 106, self.width() - 36, 18),
             Qt.AlignLeft | Qt.AlignVCenter,
             "saldo atual",
         )
 
-        footer = f"Previsto {self._formatar_data(self.projected_date)} → {self._formatar_moeda(self.projected_balance)}"
+        footer = (
+            f"Previsto {self._formatar_data(self.projected_date)} → "
+            f"{self._formatar_moeda(self.projected_balance)}"
+        )
 
         painter.setFont(footer_font)
         painter.drawText(
@@ -142,12 +184,10 @@ class BankAccountWidget(QFrame):
             footer,
         )
 
-        detalhe = self._montar_detalhe_conta()
-
         painter.drawText(
             QRectF(18, self.height() - 28, self.width() - 36, 18),
             Qt.AlignLeft | Qt.AlignVCenter,
-            detalhe,
+            self._montar_detalhe_conta(),
         )
 
     def _montar_detalhe_conta(self) -> str:
@@ -164,6 +204,59 @@ class BankAccountWidget(QFrame):
 
         return " • ".join(partes) if partes else self.name
 
+    def _draw_pixmap_fit_by_height(
+            self,
+            painter: QPainter,
+            path,
+            x: int,
+            y: int,
+            height: int,
+    ) -> None:
+        if path is None:
+            return
+
+        pixmap = QPixmap(str(path))
+
+        if pixmap.isNull():
+            return
+
+        ratio = pixmap.width() / pixmap.height()
+        width = int(height * ratio)
+
+        scaled = pixmap.scaled(
+            width,
+            height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        painter.drawPixmap(x, y, scaled)
+
+    def _draw_pixmap_cover(
+            self,
+            painter: QPainter,
+            path,
+            rect: QRectF,
+    ) -> None:
+        if path is None:
+            return
+
+        pixmap = QPixmap(str(path))
+
+        if pixmap.isNull():
+            return
+
+        scaled = pixmap.scaled(
+            rect.size().toSize(),
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation,
+        )
+
+        x = int((self.width() - scaled.width()) / 2)
+        y = int((self.height() - scaled.height()) / 2)
+
+        painter.drawPixmap(x, y, scaled)
+
     def _formatar_moeda(self, valor: float) -> str:
         return (
             f"R$ {valor:,.2f}"
@@ -174,7 +267,7 @@ class BankAccountWidget(QFrame):
 
     def _formatar_data(self, data_iso: str) -> str:
         if not data_iso:
-            return ""
+            return "--/--"
 
         partes = data_iso.split("-")
 

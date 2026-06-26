@@ -21,6 +21,10 @@ from modules.finance.ui.balance_detail_window import (
     BalanceDetailWindow,
 )
 
+from modules.finance.ui.account_detail_window import (
+    AccountDetailWindow,
+)
+
 from modules.finance.services.balance_service import (
     BalanceService,
 )
@@ -35,6 +39,10 @@ from modules.finance.ui.dialogs.balance_initial_cycle_dialog import (
 
 from modules.finance.services.finance_balance_opening_service import (
     FinanceBalanceOpeningService,
+)
+
+from modules.finance.services.balance_account_service import (
+    BalanceAccountService,
 )
 
 from modules.finance.repositories.finance_settings_repository import (
@@ -77,6 +85,10 @@ class FinanceHome(BaseScreen):
         ).inicializar_banco_usuario()
 
         self.balance_service = BalanceService(
+            self.username
+        )
+
+        self.balance_account_service = BalanceAccountService(
             self.username
         )
 
@@ -219,6 +231,11 @@ class FinanceHome(BaseScreen):
                     slot
                 )
 
+            if item["card_type"] == "account_balance":
+                self._conectar_abertura_card_conta(
+                    slot
+                )
+
             slot.delete_requested.connect(
                 self.dashboard_card_service.remover_ou_desativar_card
             )
@@ -333,6 +350,55 @@ class FinanceHome(BaseScreen):
             )
         )
 
+    def _abrir_detalhes_conta(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        conta = self.balance_account_service.buscar_por_dashboard_card_id(
+            slot.card_id
+        )
+
+        if conta is None:
+            return
+
+        self.account_detail_page = AccountDetailWindow(
+            account=conta,
+            username=self.username,
+            parent=self.window(),
+        )
+
+        self.account_detail_page.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.account_detail_page.data_changed.connect(
+            self._recarregar_dashboard
+        )
+
+        self.window().entrar_modo_foco(
+            self.account_detail_page
+        )
+
+    def _conectar_abertura_card_conta(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot: self._abrir_detalhes_conta(
+                current_slot
+            )
+        )
+
     def _on_dashboard_slot_created(
             self,
             slot,
@@ -356,6 +422,12 @@ class FinanceHome(BaseScreen):
             )
             return
 
+        if card_type == "account_balance":
+            self._conectar_abertura_card_conta(
+                slot
+            )
+            return
+
     def _voltar_para_dashboard_financeiro(self) -> None:
         self.window().sair_modo_foco()
 
@@ -363,5 +435,8 @@ class FinanceHome(BaseScreen):
 
         if hasattr(self, "balance_detail_page"):
             self.balance_detail_page = None
+
+        if hasattr(self, "account_detail_page"):
+            self.account_detail_page = None
 
         self._recarregar_dashboard()

@@ -205,7 +205,7 @@ class CreditCardDetailWindow(QWidget):
         layout.addStretch()
 
         sair = QPushButton("Sair")
-        sair.clicked.connect(self.close)
+        sair.clicked.connect(self.back_requested.emit)
         sair.setStyleSheet(
             """
             QPushButton {

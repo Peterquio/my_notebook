@@ -321,6 +321,8 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_invoice_adjustments (
 CREATE TABLE IF NOT EXISTS finance_balance_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
+    dashboard_card_id TEXT UNIQUE,
+
     name TEXT NOT NULL,
     account_type TEXT NOT NULL DEFAULT 'bank',
 

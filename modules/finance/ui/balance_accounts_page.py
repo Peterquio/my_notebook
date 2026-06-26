@@ -16,8 +16,8 @@ from modules.finance.services.balance_account_service import (
     BalanceAccountService,
 )
 
-from modules.finance.ui.dialogs.balance_account_dialog import (
-    BalanceAccountDialog,
+from modules.finance.ui.dialogs.bank_account_setup_dialog import (
+    BankAccountSetupDialog,
 )
 
 from modules.finance.services.balance_service import (
@@ -228,9 +228,9 @@ class BalanceAccountsPage(QWidget):
         return item.data(Qt.UserRole)
 
     def _abrir_dialog_nova_conta(self) -> None:
-        dialog = BalanceAccountDialog(parent=self)
+        dialog = BankAccountSetupDialog(parent=self)
 
-        if dialog.exec() != BalanceAccountDialog.Accepted:
+        if dialog.exec() != BankAccountSetupDialog.Accepted:
             return
 
         dados = dialog.obter_dados()
@@ -293,12 +293,12 @@ class BalanceAccountsPage(QWidget):
         conta_para_edicao = dict(conta)
         conta_para_edicao["opening_balance_cents"] = saldo_inicial_cents
 
-        dialog = BalanceAccountDialog(
+        dialog = BankAccountSetupDialog(
             account_data=conta_para_edicao,
             parent=self,
         )
 
-        if dialog.exec() != BalanceAccountDialog.Accepted:
+        if dialog.exec() != BankAccountSetupDialog.Accepted:
             return
 
         dados = dialog.obter_dados()

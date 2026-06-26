@@ -12,6 +12,7 @@ class DashboardCardCatalogController:
             dashboard_area,
             dashboard_card_service,
             on_slot_created=None,
+            on_card_created=None,
     ) -> None:
 
         self.parent = parent
@@ -23,6 +24,7 @@ class DashboardCardCatalogController:
         self.dashboard_card_service = dashboard_card_service
         self.card_catalog_dialog = None
         self.on_slot_created = on_slot_created
+        self.on_card_created = on_card_created
 
     def abrir_seletor_cards(self) -> None:
         cards_removidos = self.dashboard_card_service.listar_cards_removidos(
@@ -69,6 +71,9 @@ class DashboardCardCatalogController:
             card_data
         )
 
+        if card_data is None:
+            return
+
         self.dashboard_card_service.criar_card(
             module_name=self.module_name,
             card_data=card_data,
@@ -88,6 +93,9 @@ class DashboardCardCatalogController:
         slot.set_edit_mode(
             self.dashboard_area.dashboard_grid.edit_mode
         )
+
+        if self.on_card_created is not None:
+            self.on_card_created()
 
     def _readicionar_card_removido(
             self,

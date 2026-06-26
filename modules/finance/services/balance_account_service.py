@@ -25,6 +25,7 @@ class BalanceAccountService:
             is_investment: bool = False,
             opening_balance_cents: int = 0,
             snapshot_date: str | None = None,
+            dashboard_card_id: str | None = None,
     ) -> int:
         account_id = self.repository.criar_conta(
             name=name,
@@ -36,6 +37,7 @@ class BalanceAccountService:
             account_kind=account_kind,
             include_in_global_balance=include_in_global_balance,
             is_investment=is_investment,
+            dashboard_card_id=dashboard_card_id,
         )
 
         self.snapshot_repository.criar_snapshot(
@@ -56,6 +58,14 @@ class BalanceAccountService:
             account_id: int,
     ) -> dict | None:
         return self.repository.buscar_conta_por_id(account_id)
+
+    def buscar_por_dashboard_card_id(
+            self,
+            dashboard_card_id: str,
+    ) -> dict | None:
+        return self.repository.buscar_conta_por_dashboard_card_id(
+            dashboard_card_id
+        )
 
     def atualizar_conta(
             self,
