@@ -8,6 +8,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from modules.finance.ui.account_dashboard_page import (
+    AccountDashboardPage,
+)
 
 class AccountDetailWindow(QWidget):
     back_requested = Signal()
@@ -191,8 +194,22 @@ class AccountDetailWindow(QWidget):
         self._limpar_area_principal()
         self._atualizar_botao_ativo("Dashboard")
 
+        self.dashboard_page = AccountDashboardPage(
+            account=self.account,
+            username=self.username,
+            parent=self,
+        )
+
+        self.dashboard_page.back_requested.connect(
+            self.back_requested.emit
+        )
+
+        self.dashboard_page.data_changed.connect(
+            self.data_changed.emit
+        )
+
         self.content_layout.addWidget(
-            self._criar_dashboard_placeholder()
+            self.dashboard_page
         )
 
     def _mostrar_placeholder(

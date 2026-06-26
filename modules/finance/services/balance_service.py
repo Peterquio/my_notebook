@@ -850,6 +850,7 @@ class BalanceService:
             self,
             start_date: str,
             end_date: str,
+            account_id: int | None = None,
     ) -> list[dict]:
 
         receitas = self.repository.listar_receitas_periodo(
@@ -865,6 +866,12 @@ class BalanceService:
         eventos = []
 
         for receita in receitas:
+            if (
+                    account_id is not None
+                    and receita["account_id"] != account_id
+            ):
+                continue
+
             eventos.append(
                 {
                     "kind": "income",
@@ -883,6 +890,11 @@ class BalanceService:
             )
 
         for compromisso in compromissos:
+            if (
+                    account_id is not None
+                    and compromisso["account_id"] != account_id
+            ):
+                continue
             eventos.append(
                 {
                     "kind": "commitment",
