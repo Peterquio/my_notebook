@@ -207,3 +207,25 @@ class BalanceTimelinePage(QWidget):
             self.end_date_iso = nova_data
 
         self._carregar_timeline()
+
+    def _carregar_timeline(self) -> None:
+        if not self.start_date_iso or not self.end_date_iso:
+            return
+
+        eventos = self.balance_service.listar_eventos_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+        )
+
+        resumo = self.balance_service.obter_resumo_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+        )
+
+        self.timeline.renderizar(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+            eventos=eventos,
+            resumo=resumo,
+            accounts=self.accounts,
+        )
