@@ -688,3 +688,35 @@ class CreditCardExpenseRepository:
         )
 
         return cursor.fetchone() is not None
+
+    def listar_lancamentos_match_assinatura(
+            self,
+            credit_card_id: int,
+            start_date: str,
+            end_date: str,
+            amount_cents: int,
+            tolerancia_centavos: int = 50,
+    ) -> list[dict]:
+
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_expenses
+            WHERE credit_card_id = ?
+              AND effective_purchase_date BETWEEN ? AND ?
+              AND ABS(effective_amount_cents - ?) <= ?
+              AND status != 'cancelled'
+            ORDER BY effective_purchase_date ASC, id ASC
+            """,
+            (
+                credit_card_id,
+                start_date,
+                end_date,
+                amount_cents,
+                tolerancia_centavos,
+            ),
+        )
+
+        return [dict(row) for row in cursor.fetchall()]

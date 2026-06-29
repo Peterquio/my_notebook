@@ -30,6 +30,12 @@ FINANCE_CARD_CATALOG = [
         "icon": "💸",
     },
     {
+        "id": "subscriptions",
+        "title": "Assinaturas",
+        "size": "2x1",
+        "icon": "🔁",
+    },
+    {
         "id": "expenses_chart",
         "title": "Gráfico de Gastos",
         "size": "3x3",

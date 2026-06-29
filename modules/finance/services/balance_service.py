@@ -3,12 +3,14 @@ from dateutil.relativedelta import relativedelta
 from modules.finance.repositories.balance_repository import BalanceRepository
 from modules.finance.repositories.balance_account_repository import BalanceAccountRepository
 from modules.finance.repositories.balance_account_snapshot_repository import BalanceAccountSnapshotRepository
+from modules.finance.services.subscription_service import SubscriptionService
 
 class BalanceService:
     def __init__(self, username: str) -> None:
         self.repository = BalanceRepository(username)
         self.account_repository = BalanceAccountRepository(username)
         self.snapshot_repository = BalanceAccountSnapshotRepository(username)
+        self.subscription_service = SubscriptionService(username)
 
     def calcular_saldo_conta_na_data(
             self,
@@ -983,10 +985,18 @@ class BalanceService:
                 }
             )
 
+        eventos.extend(
+            self.subscription_service.listar_projecoes_periodo(
+                start_date=start_date,
+                end_date=end_date,
+                account_id=account_id,
+            )
+        )
+
         eventos.sort(
             key=lambda evento: (
                 evento["date"],
-                0 if evento["kind"] == "income" else 1,
+                self._obter_prioridade_evento_timeline(evento),
                 evento["description"].lower(),
             )
         )
@@ -1163,6 +1173,23 @@ class BalanceService:
             else:
                 compromissos_previstos += compromisso["expected_amount_cents"]
 
+        projecoes_assinaturas = (
+            self.subscription_service.listar_projecoes_periodo(
+                start_date=start_date,
+                end_date=end_date,
+                account_id=account_id,
+            )
+        )
+
+        assinaturas_previstas = 0
+
+        for projecao in projecoes_assinaturas:
+            assinaturas_previstas += int(
+                projecao["amount_cents"] or 0
+            )
+
+        compromissos_previstos += assinaturas_previstas
+
         saldo_movimentado_real = (
                 receitas_recebidas
                 - compromissos_pagos
@@ -1174,13 +1201,17 @@ class BalanceService:
         )
 
         if account_id is None:
-            saldo_final_estimado = self.calcular_saldo_global_na_data(
-                end_date
+            saldo_final_estimado = (
+                    self.calcular_saldo_global_na_data(end_date)
+                    - assinaturas_previstas
             )
         else:
-            saldo_final_estimado = self.calcular_saldo_conta_na_data(
-                account_id=account_id,
-                data_iso=end_date,
+            saldo_final_estimado = (
+                    self.calcular_saldo_conta_na_data(
+                        account_id=account_id,
+                        data_iso=end_date,
+                    )
+                    - assinaturas_previstas
             )
 
         return {
@@ -1194,9 +1225,11 @@ class BalanceService:
             "receitas_previstas_cents": receitas_previstas,
             "compromissos_pagos_cents": compromissos_pagos,
             "compromissos_previstos_cents": compromissos_previstos,
+            "assinaturas_previstas_cents": assinaturas_previstas,
             "saldo_movimentado_real_cents": saldo_movimentado_real,
             "saldo_movimentado_previsto_cents": saldo_movimentado_previsto,
             "saldo_final_estimado_cents": saldo_final_estimado,
+
         }
 
     def calcular_saldo_global_na_data(
@@ -1229,3 +1262,23 @@ class BalanceService:
                 date.fromisoformat(data_iso)
                 + relativedelta(days=-1)
         ).isoformat()
+
+    def _obter_prioridade_evento_timeline(
+            self,
+            evento: dict,
+    ) -> int:
+
+        if evento["kind"] == "income":
+            return 0
+
+        if evento.get("commitment_origin") in {
+            "credit_card_open",
+            "credit_card_projected",
+            "credit_card_closed",
+        }:
+            return 1
+
+        if evento.get("commitment_origin") == "subscription_projection":
+            return 2
+
+        return 3

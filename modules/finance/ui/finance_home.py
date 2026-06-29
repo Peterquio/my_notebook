@@ -49,6 +49,10 @@ from modules.finance.repositories.finance_settings_repository import (
     FinanceSettingsRepository,
 )
 
+from modules.finance.ui.subscriptions_page import (
+    SubscriptionsPage,
+)
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -236,6 +240,11 @@ class FinanceHome(BaseScreen):
                     slot
                 )
 
+            if item["card_type"] == "subscriptions":
+                self._conectar_abertura_card_assinaturas(
+                    slot
+                )
+
             slot.delete_requested.connect(
                 self.dashboard_card_service.remover_ou_desativar_card
             )
@@ -399,6 +408,48 @@ class FinanceHome(BaseScreen):
             )
         )
 
+    def _abrir_detalhes_assinaturas(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        self.subscriptions_page = SubscriptionsPage(
+            username=self.username,
+            parent=self.window(),
+        )
+
+        self.subscriptions_page.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.subscriptions_page.data_changed.connect(
+            self._recarregar_dashboard
+        )
+
+        self.window().entrar_modo_foco(
+            self.subscriptions_page
+        )
+
+    def _conectar_abertura_card_assinaturas(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot:
+            self._abrir_detalhes_assinaturas(
+                current_slot
+            )
+        )
+
     def _on_dashboard_slot_created(
             self,
             slot,
@@ -424,6 +475,12 @@ class FinanceHome(BaseScreen):
 
         if card_type == "account_balance":
             self._conectar_abertura_card_conta(
+                slot
+            )
+            return
+
+        if card_type == "subscriptions":
+            self._conectar_abertura_card_assinaturas(
                 slot
             )
             return

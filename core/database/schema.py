@@ -246,6 +246,7 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_expenses (
     invoice_id INTEGER,
 
     category_id INTEGER DEFAULT 1,
+    subcategory TEXT,
 
     original_description TEXT,
     effective_description TEXT,
@@ -316,6 +317,76 @@ CREATE TABLE IF NOT EXISTS finance_credit_card_invoice_adjustments (
 
     FOREIGN KEY (invoice_id)
         REFERENCES finance_credit_card_invoices(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    name TEXT NOT NULL,
+    description TEXT,
+
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+
+    charge_day INTEGER NOT NULL,
+    payment_method TEXT NOT NULL DEFAULT 'bank_account',
+
+    account_id INTEGER,
+    credit_card_id INTEGER,
+
+    match_keywords TEXT,
+
+    start_date TEXT,
+    end_date TEXT,
+
+    is_active INTEGER NOT NULL DEFAULT 1,
+    
+    archived_at TEXT,
+    archive_reason TEXT
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id),
+
+    FOREIGN KEY (credit_card_id)
+        REFERENCES finance_credit_cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS finance_subscription_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    subscription_id INTEGER NOT NULL,
+
+    reference_year INTEGER NOT NULL,
+    reference_month INTEGER NOT NULL,
+
+    expected_charge_date TEXT,
+    expected_payment_date TEXT,
+    amount_cents INTEGER,
+
+    status TEXT NOT NULL DEFAULT 'active',
+    
+        actual_charge_date TEXT,
+    actual_amount_cents INTEGER,
+
+    resolved_at TEXT,
+    resolution_type TEXT,
+
+    matched_credit_card_expense_id INTEGER,
+    matched_balance_commitment_id INTEGER,
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(subscription_id, reference_year, reference_month),
+
+    FOREIGN KEY (subscription_id)
+        REFERENCES finance_subscriptions(id)
 );
 
 CREATE TABLE IF NOT EXISTS finance_balance_accounts (

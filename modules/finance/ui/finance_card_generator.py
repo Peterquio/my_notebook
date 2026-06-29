@@ -89,6 +89,14 @@ def gerar_card_financeiro(
             card_data
         )
 
+    elif card_data.get("card_type") == "subscriptions":
+        card = AppCard(
+            title="Assinaturas",
+            value="R$ 0,00 este mês",
+            subtitle="Nenhuma assinatura ativa",
+            icon="🔁",
+        )
+
     else:
         card = AppCard(
             title=card_data["title"],
