@@ -582,57 +582,14 @@ class SubscriptionService:
             amount_cents: int,
     ) -> bool:
 
-        credit_card_id = assinatura["credit_card_id"]
-
-        if credit_card_id is None:
-            return False
-
-        palavras = self._obter_palavras_match(
-            assinatura
-        )
-
-        data_base = date.fromisoformat(
-            charge_date
-        )
-
-        data_inicio = (
-                data_base
-                + relativedelta(days=-3)
-        ).isoformat()
-
-        data_fim = (
-                data_base
-                + relativedelta(days=3)
-        ).isoformat()
-
-        lancamentos = (
-            self.credit_card_expense_repository
-            .listar_lancamentos_match_assinatura(
-                credit_card_id=credit_card_id,
-                start_date=data_inicio,
-                end_date=data_fim,
+        return (
+            self._buscar_lancamento_cartao_assinatura(
+                assinatura=assinatura,
+                charge_date=charge_date,
                 amount_cents=amount_cents,
             )
+            is not None
         )
-
-        if not lancamentos:
-            return False
-
-        if not palavras:
-            return True
-
-        for lancamento in lancamentos:
-            descricao = (
-                    lancamento["effective_description"]
-                    or lancamento["original_description"]
-                    or ""
-            ).lower()
-
-            for palavra in palavras:
-                if palavra in descricao:
-                    return True
-
-        return False
 
     def _obter_palavras_match(
             self,
@@ -802,16 +759,53 @@ class SubscriptionService:
         if cartao is None:
             raise ValueError("Cartão da assinatura não encontrado.")
 
-        expense_id = (
-            self.credit_card_detail_service.criar_lancamento_manual(
-                credit_card=cartao,
-                purchase_date=date.today().isoformat(),
-                description=assinatura["name"],
-                amount_cents=int(assinatura["amount_cents"]),
-                category_id=1,
-                installment_total=1,
-                installment_number=1,
+        data_cobranca = self.montar_data_cobranca(
+            year=reference_year,
+            month=reference_month,
+            charge_day=int(assinatura["charge_day"]),
+        )
+
+        valor_cents = int(
+            assinatura["amount_cents"] or 0
+        )
+
+        lancamento_existente = self._buscar_lancamento_cartao_assinatura(
+            assinatura=assinatura,
+            charge_date=data_cobranca,
+            amount_cents=valor_cents,
+        )
+
+        if lancamento_existente is not None:
+            expense_id = lancamento_existente["id"]
+
+            self.repository.criar_ou_atualizar_override(
+                subscription_id=assinatura["id"],
+                reference_year=reference_year,
+                reference_month=reference_month,
+                expected_charge_date=data_cobranca,
+                expected_payment_date=None,
+                amount_cents=valor_cents,
+                status="matched",
+                actual_charge_date=lancamento_existente["effective_purchase_date"],
+                actual_amount_cents=lancamento_existente["effective_amount_cents"],
+                resolved_at=date.today().isoformat(),
+                resolution_type="matched_credit_card",
+                matched_credit_card_expense_id=expense_id,
+                matched_balance_commitment_id=None,
+                notes="Cobrança encontrada no cartão de crédito.",
             )
+
+            return expense_id
+
+        expense_id = self.credit_card_detail_service.criar_lancamento_manual(
+            credit_card=cartao,
+            category_id=1,
+            effective_description=assinatura["name"],
+            effective_purchase_date=data_cobranca,
+            effective_amount_cents=valor_cents,
+            notes=notes,
+            installment_number=1,
+            installment_total=1,
         )
 
         self.credit_card_detail_service.reprocessar_faturas_cartao(
@@ -822,13 +816,76 @@ class SubscriptionService:
             subscription_id=assinatura["id"],
             reference_year=reference_year,
             reference_month=reference_month,
+            expected_charge_date=data_cobranca,
+            expected_payment_date=None,
+            amount_cents=valor_cents,
             status="charged",
-            actual_charge_date=date.today().isoformat(),
-            actual_amount_cents=int(assinatura["amount_cents"]),
+            actual_charge_date=data_cobranca,
+            actual_amount_cents=valor_cents,
             resolved_at=date.today().isoformat(),
             resolution_type="manual_credit_card",
             matched_credit_card_expense_id=expense_id,
+            matched_balance_commitment_id=None,
             notes=notes,
         )
 
         return expense_id
+
+    def _buscar_lancamento_cartao_assinatura(
+            self,
+            assinatura: dict,
+            charge_date: str,
+            amount_cents: int,
+    ) -> dict | None:
+
+        credit_card_id = assinatura["credit_card_id"]
+
+        if credit_card_id is None:
+            return None
+
+        palavras = self._obter_palavras_match(
+            assinatura
+        )
+
+        data_base = date.fromisoformat(
+            charge_date
+        )
+
+        data_inicio = (
+            data_base
+            + relativedelta(days=-3)
+        ).isoformat()
+
+        data_fim = (
+            data_base
+            + relativedelta(days=3)
+        ).isoformat()
+
+        lancamentos = (
+            self.credit_card_expense_repository
+            .listar_lancamentos_match_assinatura(
+                credit_card_id=credit_card_id,
+                start_date=data_inicio,
+                end_date=data_fim,
+                amount_cents=amount_cents,
+            )
+        )
+
+        if not lancamentos:
+            return None
+
+        if not palavras:
+            return lancamentos[0]
+
+        for lancamento in lancamentos:
+            descricao = (
+                lancamento["effective_description"]
+                or lancamento["original_description"]
+                or ""
+            ).lower()
+
+            for palavra in palavras:
+                if palavra in descricao:
+                    return lancamento
+
+        return None

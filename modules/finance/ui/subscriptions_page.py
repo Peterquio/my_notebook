@@ -1015,7 +1015,8 @@ class SubscriptionDialog(QDialog):
             if subscription_data
             else "Nova assinatura"
         )
-        self.resize(460, 520)
+        self.setMinimumWidth(460)
+        self.setMaximumHeight(520)
 
         self._montar_interface()
 
@@ -1060,19 +1061,6 @@ class SubscriptionDialog(QDialog):
         self.charge_day_input.setMaximum(31)
         self.charge_day_input.setValue(1)
 
-        self.start_date_input = QLineEdit()
-        self.start_date_input.setPlaceholderText("AAAA-MM-DD")
-        self.start_date_input.setText(date.today().isoformat())
-
-        layout.addWidget(QLabel("Primeira cobrança"))
-        layout.addWidget(self.start_date_input)
-
-        self.end_date_input = QLineEdit()
-        self.end_date_input.setPlaceholderText("Opcional: AAAA-MM-DD")
-
-        layout.addWidget(QLabel("Última cobrança"))
-        layout.addWidget(self.end_date_input)
-
         layout.addWidget(QLabel("Dia da cobrança"))
         layout.addWidget(self.charge_day_input)
 
@@ -1091,15 +1079,11 @@ class SubscriptionDialog(QDialog):
         for account in self.accounts:
             self.account_combo.addItem(account["name"], account["id"])
 
-        layout.addWidget(QLabel("Conta"))
-        layout.addWidget(self.account_combo)
+        self.destination_label = QLabel("Destino")
+        layout.addWidget(self.destination_label)
 
-        self.credit_card_combo = QComboBox()
-        for card in self.credit_cards:
-            self.credit_card_combo.addItem(card["name"], card["id"])
-
-        layout.addWidget(QLabel("Cartão"))
-        layout.addWidget(self.credit_card_combo)
+        self.destination_combo = QComboBox()
+        layout.addWidget(self.destination_combo)
 
         self.keywords_input = QLineEdit()
         self.keywords_input.setPlaceholderText("Ex: panobianco; academia")
@@ -1133,13 +1117,6 @@ class SubscriptionDialog(QDialog):
         self.amount_input.setValue(
             int(self.subscription_data["amount_cents"] or 0) / 100
         )
-        self.start_date_input.setText(
-            self.subscription_data["start_date"] or ""
-        )
-
-        self.end_date_input.setText(
-            self.subscription_data["end_date"] or ""
-        )
         self.charge_day_input.setValue(
             int(self.subscription_data["charge_day"] or 1)
         )
@@ -1148,14 +1125,17 @@ class SubscriptionDialog(QDialog):
             self.subscription_data["payment_method"],
         )
 
-        self._selecionar_combo_por_data(
-            self.account_combo,
-            self.subscription_data["account_id"],
+        self._atualizar_destino()
+
+        destino_id = (
+            self.subscription_data["credit_card_id"]
+            if self.subscription_data["payment_method"] == "credit_card"
+            else self.subscription_data["account_id"]
         )
 
         self._selecionar_combo_por_data(
-            self.credit_card_combo,
-            self.subscription_data["credit_card_id"],
+            self.destination_combo,
+            destino_id,
         )
 
         self.keywords_input.setText(
@@ -1179,12 +1159,27 @@ class SubscriptionDialog(QDialog):
     def _atualizar_destino(self) -> None:
         metodo = self.payment_method_combo.currentData()
 
-        self.account_combo.setEnabled(
-            metodo in {"bank_account", "pix"}
-        )
-        self.credit_card_combo.setEnabled(
-            metodo == "credit_card"
-        )
+        self.destination_combo.clear()
+
+        if metodo in {"bank_account", "pix"}:
+            self.destination_label.setText("Conta")
+
+            for account in self.accounts:
+                self.destination_combo.addItem(
+                    account["name"],
+                    account["id"],
+                )
+
+            return
+
+        if metodo == "credit_card":
+            self.destination_label.setText("Cartão")
+
+            for card in self.credit_cards:
+                self.destination_combo.addItem(
+                    card["name"],
+                    card["id"],
+                )
 
     def _salvar(self) -> None:
         if not self.name_input.text().strip():
@@ -1195,39 +1190,11 @@ class SubscriptionDialog(QDialog):
             )
             return
 
-        metodo = self.payment_method_combo.currentData()
-
-        if metodo in {"bank_account", "pix"} and self.account_combo.currentData() is None:
+        if self.destination_combo.currentData() is None:
             QMessageBox.warning(
                 self,
-                "Conta obrigatória",
-                "Selecione uma conta.",
-            )
-            return
-
-        if metodo == "credit_card" and self.credit_card_combo.currentData() is None:
-            QMessageBox.warning(
-                self,
-                "Cartão obrigatório",
-                "Selecione um cartão.",
-            )
-            return
-
-        try:
-            if self.start_date_input.text().strip():
-                date.fromisoformat(
-                    self.start_date_input.text().strip()
-                )
-
-            if self.end_date_input.text().strip():
-                date.fromisoformat(
-                    self.end_date_input.text().strip()
-                )
-        except ValueError:
-            QMessageBox.warning(
-                self,
-                "Data inválida",
-                "Use o formato AAAA-MM-DD.",
+                "Destino obrigatório",
+                "Selecione o destino da assinatura.",
             )
             return
 
@@ -1240,10 +1207,10 @@ class SubscriptionDialog(QDialog):
         credit_card_id = None
 
         if metodo in {"bank_account", "pix"}:
-            account_id = self.account_combo.currentData()
+            account_id = self.destination_combo.currentData()
 
         if metodo == "credit_card":
-            credit_card_id = self.credit_card_combo.currentData()
+            credit_card_id = self.destination_combo.currentData()
 
         return {
             "name": self.name_input.text().strip(),
@@ -1254,7 +1221,7 @@ class SubscriptionDialog(QDialog):
             "credit_card_id": credit_card_id,
             "description": None,
             "match_keywords": self.keywords_input.text().strip(),
-            "start_date": self.start_date_input.text().strip() or None,
-            "end_date": self.end_date_input.text().strip() or None,
+            "start_date": None,
+            "end_date": None,
             "notes": self.notes_input.text().strip(),
         }

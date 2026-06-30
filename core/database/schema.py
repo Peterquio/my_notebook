@@ -341,7 +341,7 @@ CREATE TABLE IF NOT EXISTS finance_subscriptions (
     is_active INTEGER NOT NULL DEFAULT 1,
     
     archived_at TEXT,
-    archive_reason TEXT
+    archive_reason TEXT,
 
     notes TEXT,
 

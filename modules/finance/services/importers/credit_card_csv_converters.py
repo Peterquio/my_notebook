@@ -128,10 +128,23 @@ class NubankCsvConverter:
             texto
             .replace("R$", "")
             .replace(" ", "")
-            .replace(".", "")
-            .replace(",", ".")
             .strip()
         )
+
+        if "," in texto and "." in texto:
+            if texto.rfind(",") > texto.rfind("."):
+                texto = texto.replace(".", "").replace(",", ".")
+            else:
+                texto = texto.replace(",", "")
+
+        elif "," in texto:
+            texto = texto.replace(".", "").replace(",", ".")
+
+        elif "." in texto:
+            partes = texto.split(".")
+
+            if len(partes[-1]) == 3 and len(partes) > 1:
+                texto = texto.replace(".", "")
 
         valor = Decimal(texto).quantize(
             Decimal("0.01"),
