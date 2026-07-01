@@ -415,11 +415,18 @@ class CreditCardDetailWindow(QWidget):
         self._limpar_area_principal()
         self._atualizar_botao_ativo("Dashboard")
 
+        sort_mode = getattr(
+            getattr(self, "invoice_page", None),
+            "sort_mode",
+            "parcelas",
+        )
+
         self.invoice_page = CreditCardInvoicePage(
             credit_card=self.credit_card,
             username=self.username,
             invoice_year=self.selected_invoice_year,
             invoice_month=self.selected_invoice_month,
+            sort_mode=sort_mode,
             parent=self,
         )
 

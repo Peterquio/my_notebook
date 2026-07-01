@@ -94,6 +94,7 @@ class CreditCardDetailService:
 
         rows = []
         categoria_atual = None
+        grupo_atual = None
 
         for lancamento in lancamentos:
             categoria = lancamento["category_name"] or "Sem categoria"
@@ -102,21 +103,35 @@ class CreditCardDetailService:
             if agrupar_por_categoria and categoria != categoria_atual:
                 categoria_atual = categoria
 
-                rows.append(
-                    {
-                        "type": "group",
-                        "name": categoria,
-                        "icon": "■",
-                        "count": "",
-                        "total": "",
-                        "color": cor,
-                        "background": "#f8fafc",
-                    }
-                )
+                grupo_atual = {
+                    "type": "group",
+                    "name": categoria,
+                    "icon": "■",
+                    "count": "0 itens",
+                    "total": self._formatar_moeda(0),
+                    "total_cents": 0,
+                    "items_count": 0,
+                    "color": cor,
+                    "background": "#f8fafc",
+                }
+
+                rows.append(grupo_atual)
 
             valor_parcela = lancamento["effective_amount_cents"]
             parcela_atual = lancamento["installment_number"]
             total_parcelas = lancamento["installment_total"]
+
+            if grupo_atual is not None:
+                grupo_atual["items_count"] += 1
+                grupo_atual["total_cents"] += valor_parcela
+                grupo_atual["count"] = (
+                    f"{grupo_atual['items_count']} item"
+                    if grupo_atual["items_count"] == 1
+                    else f"{grupo_atual['items_count']} itens"
+                )
+                grupo_atual["total"] = self._formatar_moeda(
+                    grupo_atual["total_cents"]
+                )
 
             if total_parcelas > 1:
                 parcelas_restantes = total_parcelas - parcela_atual + 1
@@ -592,13 +607,18 @@ class CreditCardDetailService:
             f"{installment_total}|"
             f"{competencia_primeira}"
         )
+
     def reconciliar_parcelamentos_cartao(
             self,
             credit_card: dict,
+            invoice_year: int,
+            invoice_month: int,
     ) -> None:
 
         self.expense_repository.cancelar_projecoes_parcelamento_cartao(
             credit_card_id=credit_card["id"],
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
         )
 
         grupos = self.expense_repository.listar_grupos_parcelados(

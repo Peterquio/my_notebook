@@ -646,6 +646,8 @@ class CreditCardExpenseRepository:
     def cancelar_projecoes_parcelamento_cartao(
             self,
             credit_card_id: int,
+            invoice_year: int,
+            invoice_month: int,
     ) -> None:
         cursor = self.conexao.cursor()
 
@@ -655,11 +657,29 @@ class CreditCardExpenseRepository:
             SET
                 status = 'cancelled',
                 updated_at = CURRENT_TIMESTAMP
-            WHERE credit_card_id = ?
-              AND source_type = 'projected_installment'
-              AND status != 'cancelled'
+            WHERE id IN (
+                SELECT e.id
+                FROM finance_credit_card_expenses e
+                INNER JOIN finance_credit_card_invoices i
+                    ON i.id = e.invoice_id
+                WHERE e.credit_card_id = ?
+                  AND e.source_type = 'projected_installment'
+                  AND e.status != 'cancelled'
+                  AND (
+                        i.invoice_year > ?
+                        OR (
+                            i.invoice_year = ?
+                            AND i.invoice_month >= ?
+                        )
+                  )
+            )
             """,
-            (credit_card_id,),
+            (
+                credit_card_id,
+                invoice_year,
+                invoice_year,
+                invoice_month,
+            ),
         )
 
         self.conexao.commit()

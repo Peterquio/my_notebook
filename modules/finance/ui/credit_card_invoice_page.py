@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6.QtWidgets import (
@@ -55,6 +55,10 @@ from modules.finance.ui.dialogs.credit_card_account_link_dialog import (
     CreditCardAccountLinkDialog,
 )
 
+class NoWheelComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
 class CreditCardInvoicePage(QWidget):
     back_requested = Signal()
     data_changed = Signal()
@@ -65,6 +69,7 @@ class CreditCardInvoicePage(QWidget):
             username: str,
             invoice_year: int | None = None,
             invoice_month: int | None = None,
+            sort_mode: str = "parcelas",
             parent=None,
     ) -> None:
         super().__init__(parent)
@@ -100,7 +105,7 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.categories = self.category_service.listar_categorias_ativas()
-        self.sort_mode = "parcelas"
+        self.sort_mode = sort_mode
 
         self.invoice_data = self._carregar_fatura_selecionada()
 
@@ -303,20 +308,24 @@ class CreditCardInvoicePage(QWidget):
         layout = QHBoxLayout()
         layout.setSpacing(8)
 
-        busca = QLineEdit()
-        busca.setPlaceholderText("Buscar lançamento...")
-        busca.setFixedWidth(220)
+        self.busca_input = QLineEdit()
+        self.busca_input.setPlaceholderText("Buscar lançamento...")
+        self.busca_input.setFixedWidth(220)
+        self.busca_input.textChanged.connect(self._aplicar_filtros_tabela)
 
-        categorias = QComboBox()
-        categorias.addItem("Todas as categorias", None)
+        self.categoria_filter_combo = QComboBox()
+        self.categoria_filter_combo.addItem("Todas as categorias", None)
 
         for categoria in self.categories:
-            categorias.addItem(
+            self.categoria_filter_combo.addItem(
                 categoria["name"],
                 categoria["id"],
             )
 
-        categorias.setFixedWidth(180)
+        self.categoria_filter_combo.setFixedWidth(180)
+        self.categoria_filter_combo.currentIndexChanged.connect(
+            self._aplicar_filtros_tabela
+        )
 
         #total_lancamentos = QLabel(
         #    f"{self.invoice_data['total_lancamentos']} lançamentos"
@@ -379,8 +388,8 @@ class CreditCardInvoicePage(QWidget):
             self._abrir_dialog_novo_lancamento
         )
 
-        ordenar = QComboBox()
-        ordenar.addItems(
+        self.ordenar_combo = QComboBox()
+        self.ordenar_combo.addItems(
             [
                 "Ordenar por categoria",
                 "Ordenar por data",
@@ -389,20 +398,32 @@ class CreditCardInvoicePage(QWidget):
                 "Ordenar por parcelas pagas",
             ]
         )
-        ordenar.setFixedWidth(210)
-        ordenar.currentIndexChanged.connect(
+        self.ordenar_combo.setFixedWidth(210)
+        sort_index = {
+            "categoria": 0,
+            "data": 1,
+            "alfabetica": 2,
+            "valor": 3,
+            "parcelas": 4,
+        }
+
+        self.ordenar_combo.setCurrentIndex(
+            sort_index.get(self.sort_mode, 4)
+        )
+
+        self.ordenar_combo.currentIndexChanged.connect(
             self._alterar_ordenacao
         )
 
-        layout.addWidget(busca)
-        layout.addWidget(categorias)
+        layout.addWidget(self.busca_input)
+        layout.addWidget(self.categoria_filter_combo)
         #layout.addWidget(total_lancamentos)
         layout.addStretch()
         layout.addWidget(importar)
         layout.addWidget(importar_backup)
         layout.addWidget(exportar)
         layout.addWidget(vincular_conta)
-        layout.addWidget(ordenar)
+        layout.addWidget(self.ordenar_combo)
         layout.addWidget(novo)
 
         return layout
@@ -623,7 +644,7 @@ class CreditCardInvoicePage(QWidget):
             table.setItem(row_index, col, item)
 
             if col == 3:
-                combo = QComboBox()
+                combo = NoWheelComboBox()
                 combo.setStyleSheet(
                     """
                     QComboBox {
@@ -960,6 +981,8 @@ class CreditCardInvoicePage(QWidget):
         self.table.deleteLater()
         self.table = nova_tabela
 
+        self._aplicar_filtros_tabela()
+
     def _reprocessar_faturas(self) -> None:
         total = self.detail_service.reprocessar_faturas_cartao(
             credit_card=self.credit_card,
@@ -978,6 +1001,49 @@ class CreditCardInvoicePage(QWidget):
             "Faturas reprocessadas",
             f"{total} lançamentos foram reprocessados.",
         )
+
+    def _aplicar_filtros_tabela(self) -> None:
+        texto_busca = ""
+
+        if hasattr(self, "busca_input"):
+            texto_busca = self.busca_input.text().strip().lower()
+
+        categoria_id = None
+
+        if hasattr(self, "categoria_filter_combo"):
+            categoria_id = self.categoria_filter_combo.currentData()
+
+        for row_index in range(self.table.rowCount()):
+            item = self.table.item(row_index, 2)
+
+            if item is None:
+                self.table.setRowHidden(row_index, False)
+                continue
+
+            row_data = item.data(Qt.UserRole)
+
+            if not row_data or row_data.get("type") != "expense":
+                self.table.setRowHidden(row_index, False)
+                continue
+
+            mostrar = True
+
+            if texto_busca:
+                descricao = str(row_data.get("description", "")).lower()
+                categoria = str(row_data.get("category", "")).lower()
+
+                mostrar = (
+                        texto_busca in descricao
+                        or texto_busca in categoria
+                )
+
+            if categoria_id is not None:
+                mostrar = (
+                        mostrar
+                        and row_data.get("category_id") == categoria_id
+                )
+
+            self.table.setRowHidden(row_index, not mostrar)
 
     def _alterar_categoria_lancamento(
             self,

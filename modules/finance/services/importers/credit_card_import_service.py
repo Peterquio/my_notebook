@@ -313,13 +313,18 @@ class CreditCardImportService:
                     assinatura
                 )
 
+                familia_antecipada = familia_base is not None
+
                 if familia_base is None:
                     familia_base = self._gerar_chave_familia_base(
                         credit_card=credit_card,
                         expense=expense,
                     )
 
-                if total_por_familia_base[familia_base] > 1:
+                if (
+                        not familia_antecipada
+                        and total_por_familia_base[familia_base] > 1
+                ):
                     ocorrencias_familia_agora[familia_base] += 1
 
                     installment_group_id = (
@@ -353,8 +358,9 @@ class CreditCardImportService:
             ja_importados_agora[assinatura] += 1
             total_salvo += 1
 
-        self.detail_service.reconciliar_parcelamentos_cartao(
+        self._reconciliar_cartao(
             credit_card=credit_card,
+            imported_expenses=expenses,
         )
 
         return total_salvo
@@ -421,3 +427,28 @@ class CreditCardImportService:
             total_salvo += 1
 
         return total_salvo
+
+    def _reconciliar_cartao(
+            self,
+            credit_card: dict,
+            imported_expenses: list[ImportedCreditCardExpense],
+    ) -> None:
+        if not imported_expenses:
+            return
+
+        primeira_compra = min(
+            imported_expenses,
+            key=lambda item: item.purchase_date,
+        )
+
+        invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
+            purchase_date=primeira_compra.purchase_date,
+            closing_day=credit_card["closing_day"],
+        )
+
+        self.detail_service.reconciliar_parcelamentos_cartao(
+            credit_card=credit_card,
+            invoice_year=invoice_year,
+            invoice_month=invoice_month,
+        )
+
