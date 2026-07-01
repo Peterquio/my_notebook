@@ -138,7 +138,7 @@ class BalanceRepository:
 
     def criar_compromisso(
             self,
-            cycle_id: int,
+            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             due_date: str,
@@ -422,7 +422,7 @@ class BalanceRepository:
     def atualizar_compromisso(
             self,
             compromisso_id: int,
-            cycle_id: int,
+            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             due_date: str,

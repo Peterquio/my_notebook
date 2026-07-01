@@ -100,8 +100,11 @@ class CreditCardBalanceSyncService:
             due_date
         )
 
-        if cycle is None:
-            return []
+        cycle_id = (
+            cycle["id"]
+            if cycle is not None
+            else None
+        )
 
         compromisso_ids = []
         referencias_pagamentos_atuais = set()
@@ -137,7 +140,7 @@ class CreditCardBalanceSyncService:
             compromisso_id = (
                 self.balance_repository.upsert_compromisso_por_external_reference(
                     external_reference=external_reference,
-                    cycle_id=cycle["id"],
+                    cycle_id=cycle_id,
                     description=description,
                     expected_amount_cents=valor_pago_cents,
                     actual_amount_cents=valor_pago_cents,
@@ -194,7 +197,7 @@ class CreditCardBalanceSyncService:
             compromisso_id = (
                 self.balance_repository.upsert_compromisso_por_external_reference(
                     external_reference=external_reference_open,
-                    cycle_id=cycle["id"],
+                    cycle_id=cycle_id,
                     description=description,
                     expected_amount_cents=valor_a_pagar_cents,
                     actual_amount_cents=None,

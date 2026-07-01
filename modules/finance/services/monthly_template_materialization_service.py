@@ -74,10 +74,16 @@ class MonthlyTemplateMaterializationService:
                 data_ocorrencia
             )
 
+            cycle_id = (
+                ciclo["id"]
+                if ciclo is not None
+                else None
+            )
+
             if template["template_type"] == "income":
                 criado = self._materializar_receita(
                     template=template,
-                    cycle_id=ciclo["id"],
+                    cycle_id=cycle_id,
                     data_ocorrencia=data_ocorrencia,
                     external_reference=external_reference,
                 )
@@ -92,7 +98,7 @@ class MonthlyTemplateMaterializationService:
             if template["template_type"] == "commitment":
                 criado = self._materializar_compromisso(
                     template=template,
-                    cycle_id=ciclo["id"],
+                    cycle_id=cycle_id,
                     data_ocorrencia=data_ocorrencia,
                     external_reference=external_reference,
                 )
@@ -179,7 +185,7 @@ class MonthlyTemplateMaterializationService:
     def _obter_ou_criar_ciclo_para_data(
             self,
             data_ocorrencia: date,
-    ) -> dict:
+    ) -> dict | None:
         ciclos = self.balance_repository.listar_ciclos_ativos()
 
         for ciclo in ciclos:
@@ -215,9 +221,7 @@ class MonthlyTemplateMaterializationService:
         if date.fromisoformat(ultimo_ciclo["start_date"]) <= data_ocorrencia <= date.fromisoformat(ultimo_ciclo["end_date"]):
             return ultimo_ciclo
 
-        raise ValueError(
-            "Não foi possível encontrar ou criar um ciclo para a data informada."
-        )
+        return None
 
     def _criar_proximo_ciclo(
             self,

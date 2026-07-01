@@ -1,3 +1,4 @@
+from datetime import date
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -378,35 +379,18 @@ class MonthlyTemplatesPage(QWidget):
         )
 
     def _materializar_mes(self) -> None:
-        ano, ok = QInputDialog.getInt(
-            self,
-            "Materializar mês",
-            "Ano:",
-            2026,
-            2000,
-            2100,
-        )
+        dialog = MonthYearPickerDialog(parent=self)
 
-        if not ok:
+        if dialog.exec() != MonthYearPickerDialog.Accepted:
             return
 
-        mes, ok = QInputDialog.getInt(
-            self,
-            "Materializar mês",
-            "Mês:",
-            7,
-            1,
-            12,
-        )
-
-        if not ok:
-            return
+        ano, mes = dialog.obter_mes_ano()
 
         try:
             resultado = self.materialization_service.materializar_mes(
                 ano=ano,
                 mes=mes,
-                respeitar_limite_31_dias=True,
+                respeitar_limite_31_dias=False,
             )
         except Exception as erro:
             QMessageBox.warning(
@@ -431,6 +415,71 @@ class MonthlyTemplatesPage(QWidget):
 
         self.data_changed.emit()
 
+
+class MonthYearPickerDialog(QDialog):
+    def __init__(
+            self,
+            parent=None,
+    ) -> None:
+        super().__init__(parent)
+
+        hoje = date.today()
+
+        self.setWindowTitle("Selecionar mês")
+        self.resize(320, 180)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Escolha o mês para materializar")
+        titulo.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #0f172a;"
+        )
+
+        self.month_combo = QComboBox()
+        meses = [
+            "Janeiro", "Fevereiro", "Março", "Abril",
+            "Maio", "Junho", "Julho", "Agosto",
+            "Setembro", "Outubro", "Novembro", "Dezembro",
+        ]
+
+        for index, nome_mes in enumerate(meses, start=1):
+            self.month_combo.addItem(nome_mes, index)
+
+        self.month_combo.setCurrentIndex(hoje.month - 1)
+
+        self.year_input = QSpinBox()
+        self.year_input.setMinimum(2000)
+        self.year_input.setMaximum(2100)
+        self.year_input.setValue(hoje.year)
+
+        layout.addWidget(titulo)
+        layout.addWidget(QLabel("Mês"))
+        layout.addWidget(self.month_combo)
+        layout.addWidget(QLabel("Ano"))
+        layout.addWidget(self.year_input)
+
+        footer = QHBoxLayout()
+        footer.addStretch()
+
+        cancelar = QPushButton("Cancelar")
+        cancelar.clicked.connect(self.reject)
+
+        confirmar = QPushButton("Materializar")
+        confirmar.clicked.connect(self.accept)
+
+        footer.addWidget(cancelar)
+        footer.addWidget(confirmar)
+
+        layout.addStretch()
+        layout.addLayout(footer)
+
+    def obter_mes_ano(self) -> tuple[int, int]:
+        return (
+            self.year_input.value(),
+            self.month_combo.currentData(),
+        )
 
 class MonthlyTemplateDialog(QDialog):
     def __init__(
