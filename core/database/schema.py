@@ -579,4 +579,46 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
     FOREIGN KEY (credit_card_id)
         REFERENCES finance_credit_cards(id)
 );
+
+CREATE TABLE IF NOT EXISTS finance_calculator_simulations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    name TEXT NOT NULL,
+
+    simulation_type TEXT NOT NULL DEFAULT 'statement',
+    period_mode TEXT NOT NULL DEFAULT 'one_month',
+
+    start_date TEXT,
+    end_date TEXT,
+
+    is_saved INTEGER NOT NULL DEFAULT 1,
+    is_active INTEGER NOT NULL DEFAULT 1,
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS finance_calculator_simulation_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    simulation_id INTEGER NOT NULL,
+
+    title TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'neutral',
+
+    item_date TEXT,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+
+    sort_order INTEGER NOT NULL DEFAULT 0,
+
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (simulation_id)
+        REFERENCES finance_calculator_simulations(id)
+);
 """

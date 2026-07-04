@@ -97,6 +97,14 @@ def gerar_card_financeiro(
             icon="🔁",
         )
 
+    elif card_data.get("card_type") == "calculator":
+        card = AppCard(
+            title="Calculadora",
+            value="0",
+            subtitle="Clique para abrir",
+            icon="🧮",
+        )
+
     else:
         card = AppCard(
             title=card_data["title"],

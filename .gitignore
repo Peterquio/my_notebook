@@ -8,7 +8,7 @@ venv/
 env/
 credentials.json
 token.json
-*.db
+#*.db
 *.sqlite3
 *.log
 *.tmp

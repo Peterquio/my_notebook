@@ -53,6 +53,8 @@ from modules.finance.ui.subscriptions_page import (
     SubscriptionsPage,
 )
 
+from modules.finance.ui.calculator_window import CalculatorWindow
+
 from ui.widgets.base_screen import BaseScreen
 from ui.widgets.editable_dashboard_area import EditableDashboardArea
 
@@ -242,6 +244,11 @@ class FinanceHome(BaseScreen):
 
             if item["card_type"] == "subscriptions":
                 self._conectar_abertura_card_assinaturas(
+                    slot
+                )
+
+            if item["card_type"] == "calculator":
+                self._conectar_abertura_card_calculadora(
                     slot
                 )
 
@@ -450,6 +457,43 @@ class FinanceHome(BaseScreen):
             )
         )
 
+    def _abrir_calculadora(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        self.calculator_window = CalculatorWindow(
+            username=self.username,
+            parent=self.window(),
+        )
+
+        self.calculator_window.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.window().entrar_modo_foco(
+            self.calculator_window
+        )
+
+    def _conectar_abertura_card_calculadora(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot: self._abrir_calculadora(
+                current_slot
+            )
+        )
+
     def _on_dashboard_slot_created(
             self,
             slot,
@@ -481,6 +525,12 @@ class FinanceHome(BaseScreen):
 
         if card_type == "subscriptions":
             self._conectar_abertura_card_assinaturas(
+                slot
+            )
+            return
+
+        if card_type == "calculator":
+            self._conectar_abertura_card_calculadora(
                 slot
             )
             return

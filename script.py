@@ -1,53 +1,80 @@
 import sqlite3
+from pathlib import Path
 
-db_path = r"C:\dev\Outros\my_notebook\user_data\users\default.db"
 
-conn = sqlite3.connect(db_path)
-cur = conn.cursor()
+DB_PATH = Path(
+    r"C:\dev\Outros\my_notebook\user_data\users\default.db"
+)
 
-# Descobre o id do Nubank
-cur.execute("""
-SELECT id, name
-FROM finance_credit_cards
-WHERE name LIKE '%Nubank%'
-""")
 
-row = cur.fetchone()
+def executar() -> None:
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Banco não encontrado: {DB_PATH}"
+        )
 
-if row is None:
-    print("Cartão Nubank não encontrado.")
-    conn.close()
-    raise SystemExit
+    conexao = sqlite3.connect(DB_PATH)
 
-credit_card_id = row[0]
+    try:
+        cursor = conexao.cursor()
 
-print(f"Limpando cartão: {row[1]} (id={credit_card_id})")
+        cursor.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS finance_calculator_simulations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-# Ajustes
-cur.execute("""
-DELETE FROM finance_credit_card_invoice_adjustments
-WHERE credit_card_id = ?
-""", (credit_card_id,))
+                name TEXT NOT NULL,
 
-# Lançamentos
-cur.execute("""
-DELETE FROM finance_credit_card_expenses
-WHERE credit_card_id = ?
-""", (credit_card_id,))
+                simulation_type TEXT NOT NULL DEFAULT 'statement',
+                period_mode TEXT NOT NULL DEFAULT 'one_month',
 
-# Lotes de importação
-cur.execute("""
-DELETE FROM finance_credit_card_import_batches
-WHERE credit_card_id = ?
-""", (credit_card_id,))
+                start_date TEXT,
+                end_date TEXT,
 
-# Faturas
-cur.execute("""
-DELETE FROM finance_credit_card_invoices
-WHERE credit_card_id = ?
-""", (credit_card_id,))
+                is_saved INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1,
 
-conn.commit()
-conn.close()
+                notes TEXT,
 
-print("Cartão limpo com sucesso.")
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS finance_calculator_simulation_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                simulation_id INTEGER NOT NULL,
+
+                title TEXT NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'neutral',
+
+                item_date TEXT,
+                amount_cents INTEGER NOT NULL DEFAULT 0,
+
+                sort_order INTEGER NOT NULL DEFAULT 0,
+
+                notes TEXT,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (simulation_id)
+                    REFERENCES finance_calculator_simulations(id)
+            );
+            """
+        )
+
+        conexao.commit()
+
+        print("Migração da Calculadora concluída com sucesso.")
+
+    except Exception:
+        conexao.rollback()
+        raise
+
+    finally:
+        conexao.close()
+
+
+if __name__ == "__main__":
+    executar()

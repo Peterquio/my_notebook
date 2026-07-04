@@ -111,7 +111,8 @@ class CardCatalogDialog(QDialog):
         self.cards = cards
         self.show_actions = show_actions
         self.removed_cards = removed_cards or []
-        self.current_tab = "new"
+        self.current_tab = None
+        self.tab_buttons = {}
 
         self.setWindowTitle("Adicionar card")
         self.setModal(True)
@@ -196,28 +197,8 @@ class CardCatalogDialog(QDialog):
         tabs_layout.setContentsMargins(0, 0, 0, 0)
         tabs_layout.setSpacing(10)
 
-        self.new_cards_button = QPushButton("Novos Cards")
-        self.new_cards_button.setObjectName("CatalogTabButton")
-        self.new_cards_button.setCheckable(True)
-        self.new_cards_button.setChecked(True)
-        self.new_cards_button.setMinimumHeight(44)
-        self.new_cards_button.setCursor(Qt.PointingHandCursor)
-        self.new_cards_button.clicked.connect(
-            lambda: self._switch_tab("new")
-        )
-
-        self.removed_cards_button = QPushButton("Cards Removidos")
-        self.removed_cards_button.setObjectName("CatalogTabButton")
-        self.removed_cards_button.setCheckable(True)
-        self.removed_cards_button.setMinimumHeight(44)
-        self.removed_cards_button.setCursor(Qt.PointingHandCursor)
-        self.removed_cards_button.clicked.connect(
-            lambda: self._switch_tab("removed")
-        )
-
-        tabs_layout.addWidget(self.new_cards_button)
-        tabs_layout.addWidget(self.removed_cards_button)
-        tabs_layout.addStretch()
+        self.tabs_layout = tabs_layout
+        self._criar_abas_dinamicas()
 
         scroll = QScrollArea()
         scroll.setObjectName("CardCatalogScroll")
@@ -250,13 +231,8 @@ class CardCatalogDialog(QDialog):
 
         self.current_tab = tab_name
 
-        self.new_cards_button.setChecked(
-            tab_name == "new"
-        )
-
-        self.removed_cards_button.setChecked(
-            tab_name == "removed"
-        )
+        for key, button in self.tab_buttons.items():
+            button.setChecked(key == tab_name)
 
         self._populate_cards()
 
@@ -272,12 +248,16 @@ class CardCatalogDialog(QDialog):
     def _populate_cards(self) -> None:
         self._clear_cards_layout()
 
-        if self.current_tab == "new":
-            cards = self.cards
-            show_actions = False
-        else:
+        if self.current_tab == "removed":
             cards = self.removed_cards
             show_actions = True
+        else:
+            cards = [
+                card
+                for card in self.cards
+                if card.get("group", "module") == self.current_tab
+            ]
+            show_actions = False
 
         if not cards:
             empty_label = QLabel("Nenhum card disponível nesta aba.")
@@ -313,5 +293,68 @@ class CardCatalogDialog(QDialog):
             if card.get("id") != card_id
         ]
 
-        if self.current_tab == "removed":
+        if not self.removed_cards and "removed" in self.tab_buttons:
+            button = self.tab_buttons.pop("removed")
+            button.deleteLater()
+
+            if self.current_tab == "removed":
+                abas = self._obter_abas_disponiveis()
+
+                if abas:
+                    self.current_tab = abas[0]["key"]
+                    self.tab_buttons[self.current_tab].setChecked(True)
+                else:
+                    self.current_tab = None
+
+        if self.current_tab is not None:
             self._populate_cards()
+
+    def _obter_abas_disponiveis(self) -> list[dict]:
+        abas = []
+
+        grupos = {
+            card.get("group", "module")
+            for card in self.cards
+        }
+
+        if "module" in grupos:
+            abas.append({
+                "key": "module",
+                "label": "Módulos",
+            })
+
+        if "tool" in grupos:
+            abas.append({
+                "key": "tool",
+                "label": "Ferramentas",
+            })
+
+        if self.removed_cards:
+            abas.append({
+                "key": "removed",
+                "label": "Removidos",
+            })
+
+        return abas
+
+    def _criar_abas_dinamicas(self) -> None:
+        abas = self._obter_abas_disponiveis()
+
+        for aba in abas:
+            button = QPushButton(aba["label"])
+            button.setObjectName("CatalogTabButton")
+            button.setCheckable(True)
+            button.setMinimumHeight(44)
+            button.setCursor(Qt.PointingHandCursor)
+            button.clicked.connect(
+                lambda checked=False, key=aba["key"]: self._switch_tab(key)
+            )
+
+            self.tab_buttons[aba["key"]] = button
+            self.tabs_layout.addWidget(button)
+
+        self.tabs_layout.addStretch()
+
+        if abas:
+            self.current_tab = abas[0]["key"]
+            self.tab_buttons[self.current_tab].setChecked(True)
