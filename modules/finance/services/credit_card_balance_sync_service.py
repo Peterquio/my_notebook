@@ -96,77 +96,9 @@ class CreditCardBalanceSyncService:
             due_day=credit_card["due_day"],
         )
 
-        cycle = self._obter_ciclo_por_data(
-            due_date
-        )
-
-        cycle_id = (
-            cycle["id"]
-            if cycle is not None
-            else None
-        )
+        cycle_id = None
 
         compromisso_ids = []
-        referencias_pagamentos_atuais = set()
-
-        for ajuste in ajustes:
-            if ajuste["adjustment_type"] != "payment_received":
-                continue
-
-            valor_pago_cents = abs(
-                int(ajuste["amount_cents"] or 0)
-            )
-
-            if valor_pago_cents <= 0:
-                continue
-
-            external_reference = (
-                f"cc:{credit_card_id}:"
-                f"{invoice_year}:"
-                f"{invoice_month:02d}:"
-                f"payment:{ajuste['id']}"
-            )
-
-            referencias_pagamentos_atuais.add(
-                external_reference
-            )
-
-            description = (
-                f"Fatura {credit_card['name']} "
-                f"{invoice_month:02d}/{invoice_year} "
-                f"— pagamento {self._formatar_data_br(ajuste['adjustment_date'])}"
-            )
-
-            compromisso_id = (
-                self.balance_repository.upsert_compromisso_por_external_reference(
-                    external_reference=external_reference,
-                    cycle_id=cycle_id,
-                    description=description,
-                    expected_amount_cents=valor_pago_cents,
-                    actual_amount_cents=valor_pago_cents,
-                    due_date=ajuste["adjustment_date"],
-                    paid_date=ajuste["adjustment_date"],
-                    payment_type="credit_card",
-                    account_id=credit_card["account_id"],
-                    credit_card_id=credit_card_id,
-                    status="paid",
-                    commitment_origin="credit_card_closed",
-                    projection_type="real",
-                    is_recurring=False,
-                    notes="Pagamento de fatura sincronizado automaticamente pelo cartão de crédito.",
-                )
-            )
-
-            compromisso_ids.append(
-                compromisso_id
-            )
-
-        self._remover_pagamentos_sincronizados_que_nao_existem_mais(
-            credit_card_id=credit_card_id,
-            invoice_year=invoice_year,
-            invoice_month=invoice_month,
-            referencias_pagamentos_atuais=referencias_pagamentos_atuais,
-        )
 
         external_reference_open = (
             f"cc:{credit_card_id}:"
@@ -252,16 +184,6 @@ class CreditCardBalanceSyncService:
             ano_final = int(ultima_fatura["invoice_year"])
             mes_final = int(ultima_fatura["invoice_month"])
 
-            data_final_vencimento = self._calcular_data_vencimento(
-                invoice_year=ano_final,
-                invoice_month=mes_final,
-                due_day=cartao["due_day"],
-            )
-
-            self.balance_service.garantir_ciclos_ate_data(
-                data_final_vencimento
-            )
-
             ano = ano_atual
             mes = mes_atual
 
@@ -299,36 +221,6 @@ class CreditCardBalanceSyncService:
                     mes += 1
 
         return compromisso_ids
-
-    def _remover_pagamentos_sincronizados_que_nao_existem_mais(
-            self,
-            credit_card_id: int,
-            invoice_year: int,
-            invoice_month: int,
-            referencias_pagamentos_atuais: set[str],
-    ) -> None:
-        prefixo_pagamento = (
-            f"cc:{credit_card_id}:"
-            f"{invoice_year}:"
-            f"{invoice_month:02d}:"
-            f"payment:"
-        )
-
-        compromissos_sincronizados = (
-            self.balance_repository.listar_compromissos_por_prefixo_external_reference(
-                prefixo_pagamento
-            )
-        )
-
-        for compromisso in compromissos_sincronizados:
-            external_reference = compromisso["external_reference"]
-
-            if external_reference in referencias_pagamentos_atuais:
-                continue
-
-            self.balance_repository.excluir_compromisso(
-                compromisso["id"]
-            )
 
     def _excluir_compromisso_por_external_reference(
             self,

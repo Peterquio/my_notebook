@@ -429,7 +429,7 @@ class BalanceRepository:
             payment_type: str,
             account_id: int | None,
             credit_card_id: int | None,
-            is_recurring: bool,
+            is_recurring: bool = False,
             notes: str | None = None,
             external_reference: str | None = None,
             status: str = "expected",
@@ -757,6 +757,9 @@ class BalanceRepository:
                 **dados,
             )
 
+        if compromisso["status"] == "paid":
+            return compromisso["id"]
+
         self.atualizar_compromisso(
             compromisso_id=compromisso["id"],
             external_reference=external_reference,
@@ -827,14 +830,29 @@ class BalanceRepository:
             """
             SELECT *
             FROM finance_balance_commitments
-            WHERE due_date BETWEEN ? AND ?
-            ORDER BY due_date ASC, id ASC
+            WHERE
+                CASE
+                    WHEN status = 'paid'
+                         AND paid_date IS NOT NULL
+                    THEN paid_date
+                    ELSE due_date
+                END BETWEEN ? AND ?
+            ORDER BY
+                CASE
+                    WHEN status = 'paid'
+                         AND paid_date IS NOT NULL
+                    THEN paid_date
+                    ELSE due_date
+                END ASC,
+                id ASC
             """,
             (
                 start_date,
                 end_date,
             ),
         )
+
+        return [dict(row) for row in cursor.fetchall()]
 
         return [dict(row) for row in cursor.fetchall()]
 

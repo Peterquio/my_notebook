@@ -406,7 +406,23 @@ class BalanceTimelineWidget(QWidget):
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
 
-        titulo = QLabel(evento["description"])
+        titulo_layout = QHBoxLayout()
+        titulo_layout.setContentsMargins(0, 0, 0, 0)
+        titulo_layout.setSpacing(8)
+
+        descricao = evento["description"]
+
+        if (
+                evento["kind"] == "commitment"
+                and evento.get("payment_type") == "credit_card"
+                and evento["status"] == "paid"
+        ):
+            descricao = descricao.replace(
+                " — saldo em aberto",
+                ""
+            )
+
+        titulo = QLabel(descricao)
         titulo.setStyleSheet(
             f"""
             QLabel {{
@@ -417,6 +433,58 @@ class BalanceTimelineWidget(QWidget):
             }}
             """
         )
+
+        badge = None
+
+        if evento["kind"] == "commitment":
+            status = evento["status"]
+
+            if status == "paid":
+                texto = "Pago"
+                cor = "#15803d"
+                fundo = "#dcfce7"
+                borda = "#86efac"
+
+            else:
+                from datetime import date
+
+                hoje = date.today().isoformat()
+
+                if evento["date"] < hoje:
+                    texto = "Atrasado"
+                    cor = "#be123c"
+                    fundo = "#ffe4e6"
+                    borda = "#fda4af"
+                else:
+                    texto = "Pendente"
+                    cor = "#c2410c"
+                    fundo = "#fff7ed"
+                    borda = "#fed7aa"
+
+            badge = QLabel(texto)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setFixedWidth(76)
+            badge.setMinimumHeight(42)
+
+            badge.setStyleSheet(
+                f"""
+                QLabel {{
+                    background-color: {fundo};
+                    color: {cor};
+                    border: 1px solid {borda};
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: bold;
+                    padding: 8px;
+                }}
+                """
+            )
+
+        titulo_layout.addWidget(titulo)
+        titulo_layout.addStretch()
+
+        if badge is not None:
+            titulo_layout.addWidget(badge)
 
         subtitulo = QLabel(
             f"{tipo_texto} • {self._formatar_moeda(evento['amount_cents'])}"
@@ -455,7 +523,7 @@ class BalanceTimelineWidget(QWidget):
             """
         )
 
-        info_layout.addWidget(titulo)
+        info_layout.addLayout(titulo_layout)
         info_layout.addWidget(subtitulo)
         info_layout.addWidget(detalhe)
 
