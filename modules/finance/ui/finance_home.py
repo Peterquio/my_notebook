@@ -1,63 +1,20 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QVBoxLayout
-
-from core.dashboard.services.dashboard_card_catalog_controller import (
-    DashboardCardCatalogController,
-)
-
-from modules.finance.dashboard.finance_dashboard_card_registry import (
-    FinanceDashboardCardRegistry,
-)
-
-from modules.finance.services.credit_card_service import (
-    CreditCardService,
-)
-
-from modules.finance.ui.credit_card_detail_window import (
-    CreditCardDetailWindow,
-)
-
-from modules.finance.ui.balance_detail_window import (
-    BalanceDetailWindow,
-)
-
-from modules.finance.ui.account_detail_window import (
-    AccountDetailWindow,
-)
-
-from modules.finance.services.balance_service import (
-    BalanceService,
-)
-
-from modules.finance.ui.dialogs.finance_welcome_dialog import (
-    FinanceWelcomeDialog,
-)
-
-from modules.finance.ui.dialogs.balance_initial_cycle_dialog import (
-    BalanceInitialCycleDialog,
-)
-
-from modules.finance.services.finance_balance_opening_service import (
-    FinanceBalanceOpeningService,
-)
-
-from modules.finance.services.balance_account_service import (
-    BalanceAccountService,
-)
-
-from modules.finance.repositories.finance_settings_repository import (
-    FinanceSettingsRepository,
-)
-
-from modules.finance.ui.subscriptions_page import (
-    SubscriptionsPage,
-)
-
+from core.dashboard.services.dashboard_card_catalog_controller import DashboardCardCatalogController
+from modules.finance.dashboard.finance_dashboard_card_registry import FinanceDashboardCardRegistry
+from modules.finance.services.credit_card_service import CreditCardService
+from modules.finance.ui.credit_card_detail_window import CreditCardDetailWindow
+from modules.finance.ui.balance_detail_window import BalanceDetailWindow
+from modules.finance.ui.account_detail_window import AccountDetailWindow
+from modules.finance.services.balance_service import BalanceService
+from modules.finance.ui.dialogs.finance_welcome_dialog import FinanceWelcomeDialog
+from modules.finance.ui.dialogs.balance_initial_cycle_dialog import BalanceInitialCycleDialog
+from modules.finance.services.finance_balance_opening_service import FinanceBalanceOpeningService
+from modules.finance.services.balance_account_service import BalanceAccountService
+from modules.finance.repositories.finance_settings_repository import FinanceSettingsRepository
+from modules.finance.ui.subscriptions_page import SubscriptionsPage
 from modules.finance.ui.calculator_window import CalculatorWindow
-
-from ui.widgets.base_screen import BaseScreen
-from ui.widgets.editable_dashboard_area import EditableDashboardArea
-
+from core.shared.dashboard.dashboard_home_base import DashboardHomeBase
 from core.dashboard.services.dashboard_layout_service import DashboardLayoutService
 from core.dashboard.services.dashboard_card_service import DashboardCardService
 from core.database.database_manager import DatabaseManager
@@ -66,11 +23,13 @@ from modules.finance.services.finance_service import FinanceService
 from modules.finance.ui.finance_card_generator import gerar_card_financeiro
 from modules.finance.cards.finance_card_catalog import FINANCE_CARD_CATALOG
 
-class FinanceHome(BaseScreen):
+class FinanceHome(DashboardHomeBase):
     def __init__(self):
         super().__init__(
             title="Financeiro",
             subtitle="Controle suas receitas, despesas, cartões e categorias.",
+            spacing=20,
+            grid_strategy="free",
         )
 
         self.finance_service = FinanceService()
@@ -153,15 +112,6 @@ class FinanceHome(BaseScreen):
         )
 
     def _criar_widgets(self) -> None:
-        self.dashboard_area = EditableDashboardArea(
-            spacing=20,
-            on_save_layout=self._salvar_layout_dashboard,
-        )
-
-        self.dashboard_area.edit_mode_changed.connect(
-            self.set_edit_mode
-        )
-
         self.card_catalog_controller = DashboardCardCatalogController(
             parent=self,
             module_name="finance",
@@ -176,16 +126,7 @@ class FinanceHome(BaseScreen):
         self.dashboard_area.add_card_requested.connect(
             self.card_catalog_controller.abrir_seletor_cards
         )
-
-        self.header_actions.addWidget(
-            self.dashboard_area.toolbar
-        )
-
-        content_layout = QVBoxLayout(self.content_area)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addWidget(self.dashboard_area)
-        content_layout.setAlignment(Qt.AlignTop)
-
+        
         self._carregar_layout_dashboard()
 
     def _salvar_layout_dashboard(

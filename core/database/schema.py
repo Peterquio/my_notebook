@@ -449,7 +449,7 @@ CREATE TABLE IF NOT EXISTS finance_balance_cycles (
 CREATE TABLE IF NOT EXISTS finance_balance_cycle_account_openings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    cycle_id INTEGER NOT NULL,
+    cycle_id INTEGER,
     account_id INTEGER NOT NULL,
 
     opening_balance_cents INTEGER NOT NULL DEFAULT 0,

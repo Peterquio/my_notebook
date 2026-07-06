@@ -1,7 +1,4 @@
-from datetime import date
-
 from PySide6.QtCore import Qt, Signal, QDate
-from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QWidget,
     QFrame,
@@ -9,7 +6,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QVBoxLayout,
-    QGridLayout,
     QLineEdit,
     QDialog,
     QComboBox,
@@ -20,77 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from modules.finance.services.calculator_service import CalculatorService
-from ui.widgets.add_card_button import AddCardButton
-
-class TwoLineElideLabel(QLabel):
-    def __init__(
-            self,
-            text: str = "",
-            parent=None,
-    ) -> None:
-        super().__init__(parent)
-
-        self.full_text = text
-        self.setWordWrap(True)
-        self.setText(text)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._aplicar_elide()
-
-    def setText(self, text: str) -> None:
-        self.full_text = text
-        super().setText(text)
-
-    def _aplicar_elide(self) -> None:
-        if not self.full_text:
-            return
-
-        metrics = QFontMetrics(self.font())
-        line_height = metrics.lineSpacing()
-
-        self.setMaximumHeight(line_height * 2 + 4)
-
-        words = self.full_text.split()
-        lines = []
-        current_line = ""
-
-        for word in words:
-            candidate = (
-                word
-                if not current_line
-                else f"{current_line} {word}"
-            )
-
-            if metrics.horizontalAdvance(candidate) <= self.width():
-                current_line = candidate
-            else:
-                lines.append(current_line)
-                current_line = word
-
-            if len(lines) == 2:
-                break
-
-        if current_line and len(lines) < 2:
-            lines.append(current_line)
-
-        if len(lines) < 2 and " ".join(lines) == self.full_text:
-            super().setText(self.full_text)
-            return
-
-        visible_text = "\n".join(lines)
-
-        if visible_text.replace("\n", " ") != self.full_text:
-            second_line = lines[-1] if lines else ""
-            lines[-1] = metrics.elidedText(
-                second_line,
-                Qt.ElideRight,
-                self.width(),
-            )
-            visible_text = "\n".join(lines)
-
-        super().setText(visible_text)
-
+from modules.finance.ui.calculator_dashboard import CalculatorDashboard
 
 class CalculatorWindow(QWidget):
     back_requested = Signal()
@@ -236,145 +162,17 @@ class CalculatorWindow(QWidget):
         self._limpar_area_principal()
         self._atualizar_botao_ativo("Dashboard")
 
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(28, 22, 28, 18)
-        layout.setSpacing(18)
-
-        header = QHBoxLayout()
-
-        titulo = QLabel("Calculadora")
-        titulo.setStyleSheet(
-            "font-size: 22px; font-weight: bold; color: #0f172a;"
+        self.calculator_dashboard = CalculatorDashboard(
+            username=self.username,
+            on_create_requested=self._abrir_dialog_nova_simulacao,
+            on_simulation_open_requested=self._abrir_simulacao,
+            on_simulation_delete_requested=self._excluir_simulacao,
+            parent=self,
         )
 
-        header.addWidget(titulo)
-        header.addStretch()
-
-        layout.addLayout(header)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-
-        content = QWidget()
-        self.simulations_grid = QGridLayout(content)
-        self.simulations_grid.setContentsMargins(0, 0, 0, 0)
-        self.simulations_grid.setSpacing(12)
-
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
-
-        self.content_layout.addWidget(container)
-        self._carregar_cards_simulacoes()
-
-    def _carregar_cards_simulacoes(self) -> None:
-        simulacoes = self.service.listar_simulacoes()
-
-        add_button = AddCardButton()
-        add_button.set_base_size(240, 168)
-        add_button.clicked.connect(
-            self._abrir_dialog_nova_simulacao
+        self.content_layout.addWidget(
+            self.calculator_dashboard
         )
-
-        self.simulations_grid.addWidget(
-            add_button,
-            0,
-            0,
-        )
-
-        for index, simulacao in enumerate(simulacoes, start=1):
-            row = index // 4
-            column = index % 4
-
-            self.simulations_grid.addWidget(
-                self._criar_card_simulacao(simulacao),
-                row,
-                column,
-            )
-
-    def _criar_card_simulacao(self, simulacao: dict) -> QFrame:
-        card = QFrame()
-        card.setFixedSize(240, 168)
-        card.setCursor(Qt.PointingHandCursor)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #e2e8f0;
-                border-radius: 18px;
-            }
-
-            QFrame:hover {
-                border: 1px solid #93c5fd;
-                background-color: #f8fafc;
-            }
-        """)
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(8)
-
-        top = QHBoxLayout()
-        top.setSpacing(8)
-
-        titulo = TwoLineElideLabel(simulacao["name"])
-        titulo.setStyleSheet("""
-            border: none;
-            font-size: 15px;
-            font-weight: bold;
-            color: #0f172a;
-        """)
-
-        excluir = QPushButton("×")
-        excluir.setFixedSize(28, 28)
-        excluir.setCursor(Qt.PointingHandCursor)
-        excluir.setStyleSheet("""
-            QPushButton {
-                background-color: #fef2f2;
-                color: #dc2626;
-                border: 1px solid #fecaca;
-                border-radius: 14px;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 0px;
-            }
-
-            QPushButton:hover {
-                background-color: #fee2e2;
-            }
-        """)
-        excluir.clicked.connect(
-            lambda checked=False, item=simulacao:
-            self._excluir_simulacao(item)
-        )
-
-        top.addWidget(titulo, 1)
-        top.addWidget(excluir)
-
-        tipo = self._formatar_tipo_simulacao(
-            simulacao["simulation_type"]
-        )
-
-        periodo = self._formatar_periodo_simulacao(simulacao)
-
-        detalhe = QLabel(f"{tipo}\n{periodo}")
-        detalhe.setStyleSheet("""
-            border: none;
-            font-size: 12px;
-            color: #64748b;
-        """)
-
-        layout.addLayout(top)
-        layout.addWidget(detalhe)
-        layout.addStretch()
-
-        card.mousePressEvent = (
-            lambda event, item=simulacao: self._abrir_simulacao(
-                item["id"]
-            )
-        )
-
-        return card
 
     def _abrir_dialog_nova_simulacao(self) -> None:
         dialog = CalculatorSimulationDialog(parent=self)
