@@ -1,7 +1,7 @@
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from ui.widgets.dashboard_grid import DashboardGrid
+from core.shared.dashboard.dashboard_grid import DashboardGrid
 from ui.widgets.dashboard_toolbar import DashboardToolbar
 
 

@@ -1,6 +1,8 @@
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea, QFrame
 from ui.widgets.add_card_button import AddCardButton
+from core.shared.dashboard.dashboard_layout_engine import DashboardLayoutEngine
+from core.shared.dashboard.dashboard_snapshot import DashboardSnapshot
 
 class DashboardGrid(QWidget):
     add_card_requested = Signal()
@@ -18,10 +20,17 @@ class DashboardGrid(QWidget):
         self.cell_ratio = cell_ratio
         self.spacing = spacing
 
+        self.layout_engine = DashboardLayoutEngine(
+            min_cell_width=min_cell_width,
+            max_cell_width=max_cell_width,
+            cell_ratio=cell_ratio,
+            spacing=spacing,
+        )
+
         self.items = []
         self.occupied_cells = []
         self.card_positions = {}
-        self._layout_snapshot = None
+        self.snapshot = DashboardSnapshot()
         self.current_columns = 1
         self.drop_preview = QFrame(self)
         self.drop_preview.hide()
@@ -265,14 +274,9 @@ class DashboardGrid(QWidget):
             available_width: int,
     ) -> int:
 
-        minimum_column_width = (
-                self.min_cell_width
-                + self.spacing
+        return self.layout_engine.calculate_columns(
+            available_width
         )
-
-        columns = available_width // minimum_column_width
-
-        return min(6, max(3, columns))
 
     def _calculate_cell_width(
             self,
@@ -280,12 +284,13 @@ class DashboardGrid(QWidget):
             columns: int,
     ) -> int:
 
-        return self.min_cell_width
+        return self.layout_engine.calculate_cell_width(
+            available_width,
+            columns,
+        )
 
     def _parse_size(self, size: str) -> tuple[int, int]:
-        width, height = size.lower().split("x")
-
-        return int(width), int(height)
+        return self.layout_engine.parse_size(size)
 
     def _find_available_position(
         self,
@@ -892,27 +897,28 @@ class DashboardGrid(QWidget):
 
         return layout_items
 
-    def create_layout_snapshot(self) -> None:
-        self._layout_snapshot = {
-            "items": [
-                item.copy()
-                for item in self.items
-                if item["widget"] != self.add_card_button
-            ],
-            "card_positions": {
-                widget: position.copy()
-                for widget, position in self.card_positions.items()
-                if widget != self.add_card_button
-            },
-        }
+    def create_layout_snapshot(
+            self,
+    ) -> None:
 
-    def restore_layout_snapshot(self) -> None:
-        if self._layout_snapshot is None:
+        self.snapshot.create(
+            items=self.items,
+            card_positions=self.card_positions,
+            add_button=self.add_card_button,
+        )
+
+    def restore_layout_snapshot(
+            self,
+    ) -> None:
+
+        if not self.snapshot.has_snapshot():
             return
+
+        snapshot_items = self.snapshot.get_items()
 
         snapshot_widgets = {
             item["widget"]
-            for item in self._layout_snapshot["items"]
+            for item in snapshot_items
         }
 
         current_widgets = {
@@ -920,30 +926,26 @@ class DashboardGrid(QWidget):
             for item in self.items
         }
 
-        widgets_to_remove = current_widgets - snapshot_widgets
+        widgets_to_remove = (
+                current_widgets
+                - snapshot_widgets
+        )
 
         for widget in widgets_to_remove:
             widget.hide()
             widget.setParent(None)
 
-        self.items = [
-            item.copy()
-            for item in self._layout_snapshot["items"]
-        ]
+        self.items = snapshot_items
 
-        self.card_positions = {
-            widget: position.copy()
-            for widget, position in self._layout_snapshot["card_positions"].items()
-        }
+        self.card_positions = (
+            self.snapshot.get_positions()
+        )
 
-        self._layout_snapshot = None
+        self.snapshot.clear()
 
         self.add_card_button.hide()
 
         self._rebuild_grid_from_positions()
-
-    def confirm_layout_changes(self) -> None:
-        self._layout_snapshot = None
 
     def _remove_add_card_button(self) -> None:
         self.items = [
@@ -1101,9 +1103,9 @@ class DashboardGrid(QWidget):
 
         total_rows = used_rows + self.extra_drop_rows
 
-        minimum_height = (
-                total_rows * self._last_cell_height
-                + max(0, total_rows - 1) * self.spacing
+        minimum_height = self.layout_engine.calculate_minimum_height(
+            total_rows=total_rows,
+            cell_height=self._last_cell_height,
         )
 
         self.setMinimumHeight(minimum_height)
@@ -1226,20 +1228,14 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> tuple[int, int, int, int]:
 
-        x = column * (self._last_cell_width + self.spacing)
-        y = row * (self._last_cell_height + self.spacing)
-
-        width = (
-                self._last_cell_width * width_units
-                + self.spacing * (width_units - 1)
+        return self.layout_engine.get_grid_geometry(
+            row=row,
+            column=column,
+            width_units=width_units,
+            height_units=height_units,
+            cell_width=self._last_cell_width,
+            cell_height=self._last_cell_height,
         )
-
-        height = (
-                self._last_cell_height * height_units
-                + self.spacing * (height_units - 1)
-        )
-
-        return x, y, width, height
 
     def _place_widget_on_grid(
             self,
