@@ -32,9 +32,10 @@ class CalculatorRepository:
                 period_mode,
                 start_date,
                 end_date,
-                notes
+                notes,
+                sort_order
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -43,6 +44,7 @@ class CalculatorRepository:
                 start_date,
                 end_date,
                 notes,
+                self._obter_proximo_sort_order(),
             ),
         )
 
@@ -67,7 +69,7 @@ class CalculatorRepository:
         if active_only:
             query += " WHERE is_active = 1"
 
-        query += " ORDER BY updated_at DESC, created_at DESC"
+        query += " ORDER BY sort_order ASC, id ASC"
 
         cursor.execute(query, params)
 
@@ -305,3 +307,39 @@ class CalculatorRepository:
         )
 
         self.conexao.commit()
+
+    def atualizar_ordem_simulacoes(
+            self,
+            ordered_ids: list[int],
+    ) -> None:
+
+        cursor = self.conexao.cursor()
+
+        for index, simulation_id in enumerate(ordered_ids):
+            cursor.execute(
+                """
+                UPDATE finance_calculator_simulations
+                SET
+                    sort_order = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    index,
+                    simulation_id,
+                ),
+            )
+
+        self.conexao.commit()
+
+    def _obter_proximo_sort_order(self) -> int:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT COALESCE(MAX(sort_order), -1) + 1
+            FROM finance_calculator_simulations
+            """
+        )
+
+        return int(cursor.fetchone()[0])

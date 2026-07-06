@@ -13,6 +13,7 @@ class EditableDashboardArea(QWidget):
             self,
             spacing: int = 20,
             on_save_layout=None,
+            grid_strategy: str = "free",
     ):
         super().__init__()
 
@@ -22,6 +23,7 @@ class EditableDashboardArea(QWidget):
         self.toolbar = DashboardToolbar()
         self.dashboard_grid = DashboardGrid(
             spacing=spacing,
+            strategy=grid_strategy,
         )
 
         self._criar_layout()

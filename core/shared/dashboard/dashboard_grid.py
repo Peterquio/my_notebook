@@ -1,8 +1,14 @@
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QGridLayout, QScrollArea, QFrame
 from ui.widgets.add_card_button import AddCardButton
+
 from core.shared.dashboard.dashboard_layout_engine import DashboardLayoutEngine
 from core.shared.dashboard.dashboard_snapshot import DashboardSnapshot
+from core.shared.dashboard.dashboard_autoscroll import DashboardAutoScroll
+from core.shared.dashboard.dashboard_renderer import DashboardRenderer
+from core.shared.dashboard.dashboard_free_position_strategy import FreePositionStrategy
+from core.shared.dashboard.dashboard_sequential_strategy import SequentialStrategy
+from core.shared.dashboard.dashboard_drag_engine import DashboardDragEngine
 
 class DashboardGrid(QWidget):
     add_card_requested = Signal()
@@ -12,6 +18,7 @@ class DashboardGrid(QWidget):
         max_cell_width: int = 300,
         cell_ratio: float = 0.70,
         spacing: int = 20,
+        strategy: str = "free",
     ):
         super().__init__()
 
@@ -25,6 +32,11 @@ class DashboardGrid(QWidget):
             max_cell_width=max_cell_width,
             cell_ratio=cell_ratio,
             spacing=spacing,
+        )
+
+        self.renderer = DashboardRenderer(
+            owner=self,
+            layout_engine=self.layout_engine,
         )
 
         self.items = []
@@ -57,14 +69,13 @@ class DashboardGrid(QWidget):
         self._last_cell_height = int(self.min_cell_width * self.cell_ratio)
         self.extra_drop_rows = 1
 
-        self._drag_auto_scroll_active = False
-        self._auto_scroll_direction = 0
-        self._auto_scroll_speed = 18
-        self._auto_scroll_margin = 80
+        self.auto_scroll = DashboardAutoScroll(self)
+        if strategy == "sequential":
+            self.layout_strategy = SequentialStrategy(self)
+        else:
+            self.layout_strategy = FreePositionStrategy(self)
 
-        self._auto_scroll_timer = QTimer(self)
-        self._auto_scroll_timer.setInterval(30)
-        self._auto_scroll_timer.timeout.connect(self._perform_auto_scroll)
+        self.drag_engine = DashboardDragEngine(self)
 
     def add_card(
             self,
@@ -203,6 +214,9 @@ class DashboardGrid(QWidget):
             available_width
         )
 
+        if hasattr(self.layout_strategy, "recompute_all_positions"):
+            self.layout_strategy.recompute_all_positions()
+
         cell_width = self._calculate_cell_width(
             available_width,
             self.current_columns,
@@ -293,51 +307,45 @@ class DashboardGrid(QWidget):
         return self.layout_engine.parse_size(size)
 
     def _find_available_position(
-        self,
-        width_units: int,
-        height_units: int,
+            self,
+            width_units: int,
+            height_units: int,
     ) -> tuple[int, int]:
-        row = 0
 
-        while True:
-            for column in range(self.current_columns):
-                if self._can_place_card(
-                    row,
-                    column,
-                    width_units,
-                    height_units,
-                ):
-                    return row, column
-
-            row += 1
+        return self.layout_strategy.find_available_position(
+            width_units,
+            height_units,
+        )
 
     def _can_place_card(
-        self,
-        row: int,
-        column: int,
-        width_units: int,
-        height_units: int,
+            self,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
     ) -> bool:
-        if column + width_units > self.current_columns:
-            return False
 
-        for r in range(row, row + height_units):
-            for c in range(column, column + width_units):
-                if (r, c) in self.occupied_cells:
-                    return False
-
-        return True
+        return self.layout_strategy.can_place_card(
+            row,
+            column,
+            width_units,
+            height_units,
+        )
 
     def _mark_cells_as_occupied(
-        self,
-        row: int,
-        column: int,
-        width_units: int,
-        height_units: int,
+            self,
+            row: int,
+            column: int,
+            width_units: int,
+            height_units: int,
     ) -> None:
-        for r in range(row, row + height_units):
-            for c in range(column, column + width_units):
-                self.occupied_cells.append((r, c))
+
+        self.layout_strategy.mark_cells_as_occupied(
+            row,
+            column,
+            width_units,
+            height_units,
+        )
 
     def get_cards_in_area(
             self,
@@ -347,34 +355,12 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> list:
 
-        target_cells = set()
-
-        for r in range(row, row + height_units):
-            for c in range(column, column + width_units):
-                target_cells.add((r, c))
-
-        conflicting_cards = []
-
-        for widget, position in list(self.card_positions.items()):
-
-            if widget == self.add_card_button and not self.edit_mode:
-                widget.hide()
-                continue
-            widget_cells = set()
-
-            widget_row = position["row"]
-            widget_column = position["column"]
-            widget_width = position["width_units"]
-            widget_height = position["height_units"]
-
-            for r in range(widget_row, widget_row + widget_height):
-                for c in range(widget_column, widget_column + widget_width):
-                    widget_cells.add((r, c))
-
-            if target_cells.intersection(widget_cells):
-                conflicting_cards.append(widget)
-
-        return conflicting_cards
+        return self.drag_engine.get_cards_in_area(
+            row,
+            column,
+            width_units,
+            height_units,
+        )
 
     def can_drop_card_at(
             self,
@@ -384,10 +370,12 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> bool:
 
-        if column + width_units > self.current_columns:
-            return False
-
-        return True
+        return self.drag_engine.can_drop_card_at(
+            row,
+            column,
+            width_units,
+            height_units,
+        )
 
     def _clear_layout(self) -> None:
         while self.layout.count():
@@ -401,32 +389,9 @@ class DashboardGrid(QWidget):
             global_pos,
     ) -> tuple[int, int] | None:
 
-        local_pos = self.mapFromGlobal(global_pos)
-
-        if not self.rect().contains(local_pos):
-            return None
-
-        used_rows = max(
-            (
-                position["row"] + position["height_units"]
-                for position in self.card_positions.values()
-            ),
-            default=0,
+        return self.drag_engine.get_cell_from_global_position(
+            global_pos
         )
-
-        total_rows = used_rows + self.extra_drop_rows
-
-        for row in range(total_rows):
-            for column in range(self.current_columns):
-                cell_rect = self.layout.cellRect(
-                    row,
-                    column,
-                )
-
-                if cell_rect.contains(local_pos):
-                    return row, column
-
-        return None
 
     def show_drop_preview(
             self,
@@ -437,41 +402,16 @@ class DashboardGrid(QWidget):
             valid: bool,
     ) -> None:
 
-        x, y, width, height = self._get_grid_geometry(
+        self.drag_engine.show_drop_preview(
             row,
             column,
             width_units,
             height_units,
+            valid,
         )
-
-        if valid:
-            color = "rgba(34, 197, 94, 55)"
-            border = "rgba(34, 197, 94, 150)"
-        else:
-            color = "rgba(239, 68, 68, 45)"
-            border = "rgba(239, 68, 68, 140)"
-
-        self.drop_preview.setStyleSheet(f"""
-            QFrame {{
-                background-color: {color};
-                border: 2px dashed {border};
-                border-radius: 18px;
-            }}
-        """)
-
-        self.drop_preview.setGeometry(
-            x,
-            y,
-            width,
-            height,
-        )
-
-        self.drop_preview.show()
-        self.drop_preview.raise_()
 
     def hide_drop_preview(self) -> None:
-        self.drop_preview.hide()
-        self._stop_auto_scroll()
+        self.drag_engine.hide_drop_preview()
 
     def remove_card(
             self,
@@ -512,29 +452,11 @@ class DashboardGrid(QWidget):
             column: int,
     ) -> None:
 
-        if widget not in self.card_positions:
-            return
-
-        position = self.card_positions[widget]
-
-        width_units = position["width_units"]
-        height_units = position["height_units"]
-
-        if column + width_units > self.current_columns:
-            return
-
-        self._move_card_with_push(
+        self.drag_engine.move_card_to(
             widget,
             row,
             column,
-            width_units,
-            height_units,
         )
-
-        if self.edit_mode:
-            self._update_add_card_button_position()
-
-        self._rebuild_grid_from_positions()
 
     def _rebuild_grid_from_positions(self) -> None:
         self._clear_layout()
@@ -614,79 +536,13 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> None:
 
-        old_positions = {
-            widget: position.copy()
-            for widget, position in self.card_positions.items()
-        }
-
-        ordered_widgets = sorted(
-            old_positions.keys(),
-            key=lambda widget: (
-                old_positions[widget]["row"],
-                old_positions[widget]["column"],
-            ),
-        )
-
-        self.card_positions = {}
-        self.occupied_cells = []
-
-        self.card_positions[moved_widget] = {
-            "row": target_row,
-            "column": target_column,
-            "width_units": width_units,
-            "height_units": height_units,
-        }
-
-        self._mark_cells_as_occupied(
+        self.layout_strategy.move_card_with_push(
+            moved_widget,
             target_row,
             target_column,
             width_units,
             height_units,
         )
-
-        for widget in ordered_widgets:
-            if widget == moved_widget:
-                continue
-
-            if widget == self.add_card_button:
-                continue
-
-            old_position = old_positions[widget]
-
-            old_row = old_position["row"]
-            old_column = old_position["column"]
-            old_width_units = old_position["width_units"]
-            old_height_units = old_position["height_units"]
-
-            if self._can_place_card(
-                    old_row,
-                    old_column,
-                    old_width_units,
-                    old_height_units,
-            ):
-                new_row = old_row
-                new_column = old_column
-            else:
-                new_row, new_column = self._find_available_position_from(
-                    old_row,
-                    old_column,
-                    old_width_units,
-                    old_height_units,
-                )
-
-            self.card_positions[widget] = {
-                "row": new_row,
-                "column": new_column,
-                "width_units": old_width_units,
-                "height_units": old_height_units,
-            }
-
-            self._mark_cells_as_occupied(
-                new_row,
-                new_column,
-                old_width_units,
-                old_height_units,
-            )
 
     def _find_available_position_from(
             self,
@@ -696,23 +552,12 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> tuple[int, int]:
 
-        row = start_row
-        column = start_column
-
-        while True:
-            while column < self.current_columns:
-                if self._can_place_card(
-                        row,
-                        column,
-                        width_units,
-                        height_units,
-                ):
-                    return row, column
-
-                column += 1
-
-            row += 1
-            column = 0
+        return self.layout_strategy.find_available_position_from(
+            start_row,
+            start_column,
+            width_units,
+            height_units,
+        )
 
     def _apply_widget_span_size(
             self,
@@ -721,28 +566,11 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> None:
 
-        real_width = (
-                self._last_cell_width * width_units
-                + self.spacing * (width_units - 1)
+        self.renderer.apply_widget_span_size(
+            widget,
+            width_units,
+            height_units,
         )
-
-        real_height = (
-                self._last_cell_height * height_units
-                + self.spacing * (height_units - 1)
-        )
-
-        if hasattr(widget, "set_base_size"):
-            scale = getattr(widget, "scale", 1)
-
-            widget.set_base_size(
-                int(real_width / scale),
-                int(real_height / scale),
-            )
-        else:
-            widget.setFixedSize(
-                real_width,
-                real_height,
-            )
 
     def _has_cards_outside_current_columns(self) -> bool:
         for position in self.card_positions.values():
@@ -1030,85 +858,25 @@ class DashboardGrid(QWidget):
             self._force_hide_add_card_button()
 
     def start_drag_auto_scroll(self) -> None:
-        self._drag_auto_scroll_active = True
+        self.auto_scroll.start()
 
     def stop_drag_auto_scroll(self) -> None:
-        self._drag_auto_scroll_active = False
-        self._stop_auto_scroll()
+        self.auto_scroll.stop()
 
     def update_drag_auto_scroll(self, global_pos) -> None:
-        if not self._drag_auto_scroll_active:
-            self._stop_auto_scroll()
-            return
-
-        scroll_area = self._get_scroll_area_parent()
-
-        if scroll_area is None:
-            self._stop_auto_scroll()
-            return
-
-        viewport_pos = scroll_area.viewport().mapFromGlobal(global_pos)
-        viewport_height = scroll_area.viewport().height()
-
-        if viewport_pos.y() < self._auto_scroll_margin:
-            self._auto_scroll_direction = -1
-        elif viewport_pos.y() > viewport_height - self._auto_scroll_margin:
-            self._auto_scroll_direction = 1
-        else:
-            self._stop_auto_scroll()
-            return
-
-        if not self._auto_scroll_timer.isActive():
-            self._auto_scroll_timer.start()
+        self.auto_scroll.update(global_pos)
 
     def _perform_auto_scroll(self) -> None:
-        scroll_area = self._get_scroll_area_parent()
-
-        if scroll_area is None:
-            self._stop_auto_scroll()
-            return
-
-        scroll_bar = scroll_area.verticalScrollBar()
-
-        scroll_bar.setValue(
-            scroll_bar.value()
-            + self._auto_scroll_direction * self._auto_scroll_speed
-        )
+        self.auto_scroll.perform()
 
     def _stop_auto_scroll(self) -> None:
-        self._auto_scroll_direction = 0
-
-        if self._auto_scroll_timer.isActive():
-            self._auto_scroll_timer.stop()
+        self.auto_scroll.stop()
 
     def _get_scroll_area_parent(self) -> QScrollArea | None:
-        parent = self.parentWidget()
-
-        while parent is not None:
-            if isinstance(parent, QScrollArea):
-                return parent
-
-            parent = parent.parentWidget()
-
-        return None
+        return self.auto_scroll._get_scroll_area_parent()
 
     def _update_minimum_grid_height(self) -> None:
-        if not self.card_positions:
-            return
-
-        used_rows = max(
-            position["row"] + position["height_units"]
-            for position in self.card_positions.values()
-        )
-
-        total_rows = used_rows + self.extra_drop_rows
-
-        minimum_height = self.layout_engine.calculate_minimum_height(
-            total_rows=total_rows,
-            cell_height=self._last_cell_height,
-        )
-
-        self.setMinimumHeight(minimum_height)
+        self.renderer.update_minimum_grid_height()
 
     def _apply_fixed_grid_tracks(
             self,
@@ -1116,109 +884,16 @@ class DashboardGrid(QWidget):
             cell_height: int,
     ) -> None:
 
-        self._clear_unused_grid_tracks()
-
-        for column in range(self.current_columns):
-            self.layout.setColumnMinimumWidth(
-                column,
-                cell_width,
-            )
-
-            self.layout.setColumnStretch(
-                column,
-                0,
-            )
-
-        # Coluna fantasma: absorve a sobra horizontal da tela.
-        # Assim, o espaço ENTRE as colunas reais não aumenta.
-        spacer_column = self.current_columns
-
-        self.layout.setColumnMinimumWidth(
-            spacer_column,
-            0,
+        self.renderer.apply_fixed_grid_tracks(
+            cell_width,
+            cell_height,
         )
-
-        self.layout.setColumnStretch(
-            spacer_column,
-            1,
-        )
-
-        max_row = 0
-
-        for position in self.card_positions.values():
-            max_row = max(
-                max_row,
-                position["row"] + position["height_units"],
-            )
-
-        total_rows = max_row + getattr(self, "extra_drop_rows", 0)
-
-        for row in range(total_rows):
-            self.layout.setRowMinimumHeight(
-                row,
-                cell_height,
-            )
-
-            self.layout.setRowStretch(
-                row,
-                0,
-            )
 
     def _clear_unused_grid_tracks(self) -> None:
-        for row in range(100):
-            self.layout.setRowMinimumHeight(row, 0)
-            self.layout.setRowStretch(row, 0)
-
-        for column in range(20):
-            self.layout.setColumnMinimumWidth(column, 0)
-            self.layout.setColumnStretch(column, 0)
+        self.renderer.clear_unused_grid_tracks()
 
     def _update_debug_cells(self) -> None:
-        for frame in self.debug_cell_frames:
-            frame.deleteLater()
-
-        self.debug_cell_frames = []
-
-        if not self.debug_show_cells:
-            return
-
-        used_rows = max(
-            (
-                position["row"] + position["height_units"]
-                for position in self.card_positions.values()
-            ),
-            default=0,
-        )
-
-        total_rows = used_rows + self.extra_drop_rows
-
-        for row in range(total_rows):
-            for column in range(self.current_columns):
-                x, y, width, height = self._get_grid_geometry(
-                    row,
-                    column,
-                    1,
-                    1,
-                )
-
-                frame = QFrame(self)
-                frame.setStyleSheet("""
-                    QFrame {
-                        background-color: rgba(59, 130, 246, 25);
-                        border: 1px solid rgba(59, 130, 246, 90);
-                    }
-                """)
-
-                frame.setGeometry(
-                    x,
-                    y,
-                    width,
-                    height,
-                )
-                frame.lower()
-                frame.show()
-
-                self.debug_cell_frames.append(frame)
+        self.renderer.update_debug_cells()
 
     def _get_grid_geometry(
             self,
@@ -1246,21 +921,16 @@ class DashboardGrid(QWidget):
             height_units: int,
     ) -> None:
 
-        self._apply_widget_span_size(
+        self.renderer.place_widget_on_grid(
             widget,
-            width_units,
-            height_units,
-        )
-
-        x, y, width, height = self._get_grid_geometry(
             row,
             column,
             width_units,
             height_units,
         )
 
-        widget.setParent(self)
-        widget.setGeometry(x, y, width, height)
-        widget.show()
-        widget.raise_()
+    def confirm_layout_changes(
+            self,
+    ) -> None:
 
+        self.snapshot.clear()

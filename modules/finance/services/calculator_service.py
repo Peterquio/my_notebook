@@ -59,6 +59,15 @@ class CalculatorService:
             active_only=True,
         )
 
+    def atualizar_ordem_simulacoes(
+            self,
+            ordered_ids: list[int],
+    ) -> None:
+
+        self.repository.atualizar_ordem_simulacoes(
+            ordered_ids
+        )
+
     def buscar_simulacao_com_itens(
             self,
             simulation_id: int,

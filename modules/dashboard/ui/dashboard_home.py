@@ -1,39 +1,23 @@
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtCore import Qt
-
-from ui.widgets.base_screen import BaseScreen
 from ui.widgets.app_card import AppCard
 from ui.widgets.card_slot import CardSlot
-from ui.widgets.editable_dashboard_area import EditableDashboardArea
+
+from core.shared.dashboard.dashboard_home_base import (
+    DashboardHomeBase,
+)
 
 
-class DashboardHome(BaseScreen):
+class DashboardHome(DashboardHomeBase):
     def __init__(self):
         super().__init__(
             title="Dashboard",
             subtitle="Visão geral do seu sistema pessoal.",
-        )
-
-        self._criar_widgets()
-
-    def _criar_widgets(self) -> None:
-        self.dashboard_area = EditableDashboardArea(
             spacing=20,
+            grid_strategy="free",
         )
 
-        self.dashboard_area.edit_mode_changed.connect(
-            self.set_edit_mode
-        )
+        self._carregar_cards_mockados()
 
-        self.header_actions.addWidget(
-            self.dashboard_area.toolbar
-        )
-
-        content_layout = QVBoxLayout(self.content_area)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addWidget(self.dashboard_area)
-        content_layout.setAlignment(Qt.AlignTop)
-
+    def _carregar_cards_mockados(self) -> None:
         cards = [
             ("Tarefas", "12", "5 vencem hoje", "📌", "1x1"),
             ("Financeiro", "R$ 2.500", "saldo previsto", "💰", "2x1"),

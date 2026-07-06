@@ -594,6 +594,8 @@ CREATE TABLE IF NOT EXISTS finance_calculator_simulations (
     is_saved INTEGER NOT NULL DEFAULT 1,
     is_active INTEGER NOT NULL DEFAULT 1,
 
+    sort_order INTEGER NOT NULL DEFAULT 0,
+
     notes TEXT,
 
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
