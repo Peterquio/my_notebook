@@ -147,6 +147,11 @@ class CreditCardDetailService:
                     "type": "expense",
                     "expense_id": lancamento["expense_id"],
                     "category_id": lancamento["category_id"],
+                    "installment_number": lancamento["installment_number"],
+                    "installment_total": lancamento["installment_total"],
+                    "installment_group_id": lancamento["installment_group_id"],
+                    "subcategory": lancamento.get("subcategory"),
+                    "notes": lancamento.get("notes"),
                     "date": self._formatar_data_curta(
                         lancamento["effective_purchase_date"]
                     ),
@@ -312,8 +317,29 @@ class CreditCardDetailService:
             effective_description: str,
             effective_purchase_date: str,
             effective_amount_cents: int,
+            subcategory: str | None = None,
             notes: str | None = None,
     ) -> None:
+        lancamento_atual = self.expense_repository.buscar_por_id(
+            expense_id
+        )
+
+        if (
+                lancamento_atual
+                and lancamento_atual.get("installment_group_id")
+        ):
+            self._atualizar_grupo_parcelado_por_edicao(
+                credit_card=credit_card,
+                lancamento_base=lancamento_atual,
+                category_id=category_id,
+                effective_description=effective_description,
+                effective_purchase_date=effective_purchase_date,
+                effective_amount_cents=effective_amount_cents,
+                subcategory=subcategory,
+                notes=notes,
+            )
+            return
+
         purchase_date = date.fromisoformat(effective_purchase_date)
 
         invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
@@ -356,9 +382,44 @@ class CreditCardDetailService:
             category_id=category_id,
             effective_description=effective_description,
             effective_purchase_date=effective_purchase_date,
+            billing_date=closing_date.isoformat(),
             effective_amount_cents=effective_amount_cents,
+            subcategory=subcategory,
             notes=notes,
         )
+
+    def _atualizar_grupo_parcelado_por_edicao(
+            self,
+            credit_card: dict,
+            lancamento_base: dict,
+            category_id: int,
+            effective_description: str,
+            effective_purchase_date: str,
+            effective_amount_cents: int,
+            subcategory: str | None = None,
+            notes: str | None = None,
+    ) -> None:
+        installment_group_id = lancamento_base["installment_group_id"]
+
+        parcelas = self.expense_repository.listar_parcelas_grupo(
+            installment_group_id=installment_group_id,
+        )
+
+        if not parcelas:
+            return
+
+        for parcela in parcelas:
+            self.expense_repository.atualizar_lancamento(
+                expense_id=parcela["id"],
+                invoice_id=parcela["invoice_id"],
+                category_id=category_id,
+                effective_description=effective_description,
+                effective_purchase_date=parcela["effective_purchase_date"],
+                billing_date=parcela["billing_date"],
+                effective_amount_cents=effective_amount_cents,
+                subcategory=subcategory,
+                notes=notes,
+            )
 
     def criar_lancamento_manual(
             self,
@@ -367,6 +428,7 @@ class CreditCardDetailService:
             effective_description: str,
             effective_purchase_date: str,
             effective_amount_cents: int,
+            subcategory: str | None = None,
             notes: str | None = None,
             installment_number: int = 1,
             installment_total: int = 1,
@@ -378,6 +440,7 @@ class CreditCardDetailService:
                 effective_description=effective_description,
                 effective_purchase_date=effective_purchase_date,
                 effective_amount_cents=effective_amount_cents,
+                subcategory=subcategory,
                 notes=notes,
             )
 
@@ -387,6 +450,7 @@ class CreditCardDetailService:
             effective_description=effective_description,
             effective_purchase_date=effective_purchase_date,
             effective_amount_cents=effective_amount_cents,
+            subcategory=subcategory,
             notes=notes,
             installment_number=installment_number,
             installment_total=installment_total,
@@ -399,6 +463,7 @@ class CreditCardDetailService:
             effective_description: str,
             effective_purchase_date: str,
             effective_amount_cents: int,
+            subcategory: str | None = None,
             notes: str | None = None,
     ) -> int:
         invoice_id, closing_date = self._obter_ou_criar_fatura_por_data(
@@ -416,6 +481,7 @@ class CreditCardDetailService:
             installment_number=1,
             installment_total=1,
             effective_amount_cents=effective_amount_cents,
+            subcategory=subcategory,
             notes=notes,
             original_description=effective_description,
             original_purchase_date=effective_purchase_date,
@@ -433,6 +499,7 @@ class CreditCardDetailService:
             effective_amount_cents: int,
             installment_number: int,
             installment_total: int,
+            subcategory: str | None = None,
             notes: str | None = None,
             source_type: str = "manual",
             source_reference: str | None = None,
@@ -486,6 +553,7 @@ class CreditCardDetailService:
                 installment_total=installment_total,
                 installment_group_id=installment_group_id,
                 effective_amount_cents=effective_amount_cents,
+                subcategory=subcategory,
                 notes=notes if numero_parcela == installment_number else None,
                 original_description=effective_description,
                 original_purchase_date=parcela_atual_data.isoformat(),
@@ -503,6 +571,7 @@ class CreditCardDetailService:
             effective_description: str,
             effective_purchase_date: str,
             effective_amount_cents: int,
+            subcategory: str | None,
             notes: str | None,
             installment_number: int,
             installment_total: int,
@@ -529,6 +598,7 @@ class CreditCardDetailService:
             effective_amount_cents=effective_amount_cents,
             installment_number=installment_number,
             installment_total=installment_total,
+            subcategory=subcategory,
             notes=notes,
             source_type="manual",
         )
@@ -707,6 +777,7 @@ class CreditCardDetailService:
                 installment_group_id=installment_group_id,
                 effective_amount_cents=base["effective_amount_cents"],
                 import_batch_id=None,
+                subcategory=base.get("subcategory"),
                 created_by="reconcile_installment",
                 notes="Parcela projetada automaticamente",
                 original_description=base["original_description"],

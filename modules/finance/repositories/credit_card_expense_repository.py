@@ -17,6 +17,7 @@ class CreditCardExpenseRepository:
             installment_number: int,
             installment_total: int,
             effective_amount_cents: int,
+            subcategory: str | None = None,
             installment_group_id: str | None = None,
             notes: str | None = None,
             original_description: str | None = None,
@@ -44,6 +45,8 @@ class CreditCardExpenseRepository:
 
                 original_amount_cents,
                 effective_amount_cents,
+                
+                subcategory,
 
                 billing_date,
 
@@ -60,7 +63,7 @@ class CreditCardExpenseRepository:
 
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 credit_card_id,
@@ -75,6 +78,8 @@ class CreditCardExpenseRepository:
 
                 original_amount_cents,
                 effective_amount_cents,
+
+                subcategory,
 
                 billing_date,
 
@@ -243,6 +248,9 @@ class CreditCardExpenseRepository:
                 e.effective_description,
                 e.effective_purchase_date,
                 e.effective_amount_cents,
+                
+                e.subcategory,
+                e.notes,
 
                 e.original_description,
                 e.original_purchase_date,
@@ -406,7 +414,9 @@ class CreditCardExpenseRepository:
             category_id: int,
             effective_description: str,
             effective_purchase_date: str,
+            billing_date: str,
             effective_amount_cents: int,
+            subcategory: str | None = None,
             notes: str | None = None,
     ) -> None:
         cursor = self.conexao.cursor()
@@ -419,7 +429,9 @@ class CreditCardExpenseRepository:
                 category_id = ?,
                 effective_description = ?,
                 effective_purchase_date = ?,
+                billing_date = ?,
                 effective_amount_cents = ?,
+                subcategory = ?,
                 notes = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -430,7 +442,9 @@ class CreditCardExpenseRepository:
                 category_id,
                 effective_description,
                 effective_purchase_date,
+                billing_date,
                 effective_amount_cents,
+                subcategory,
                 notes,
                 expense_id,
             ),
@@ -608,6 +622,30 @@ class CreditCardExpenseRepository:
                 installment_group_id,
                 installment_number,
             ),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def buscar_por_id(
+            self,
+            expense_id: int,
+    ) -> dict | None:
+
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_expenses
+            WHERE id = ?
+              AND status != 'cancelled'
+            """,
+            (expense_id,),
         )
 
         row = cursor.fetchone()

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -8,13 +8,13 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QComboBox,
-    QDateEdit,
     QDoubleSpinBox,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
 )
 
+from ui.widgets.date_line_edit import DateLineEdit
 
 class CreditCardExpenseDialog(QDialog):
     def __init__(
@@ -40,6 +40,7 @@ class CreditCardExpenseDialog(QDialog):
         self._montar_interface()
         self._preencher_dados()
         self._atualizar_estado_parcelamento()
+        self._aplicar_estilo()
 
     def _montar_interface(self) -> None:
         layout = QVBoxLayout(self)
@@ -48,8 +49,7 @@ class CreditCardExpenseDialog(QDialog):
 
         self.descricao_input = QLineEdit()
 
-        self.data_input = QDateEdit()
-        self.data_input.setCalendarPopup(True)
+        self.data_input = DateLineEdit()
 
         self.valor_input = QDoubleSpinBox()
         self.valor_input.setMaximum(999999.99)
@@ -57,6 +57,9 @@ class CreditCardExpenseDialog(QDialog):
         self.valor_input.setPrefix("R$ ")
 
         self.categoria_input = QComboBox()
+
+        self.subcategoria_input = QLineEdit()
+        self.subcategoria_input.setPlaceholderText("Ex.: Mercado, farmácia, transporte...")
 
         for categoria_item in self.categories:
             self.categoria_input.addItem(
@@ -95,6 +98,7 @@ class CreditCardExpenseDialog(QDialog):
         form.addRow("Data da parcela atual:", self.data_input)
         form.addRow("Valor da parcela:", self.valor_input)
         form.addRow("Categoria:", self.categoria_input)
+        form.addRow("Subcategoria:", self.subcategoria_input)
         form.addRow("", self.parcelado_checkbox)
         form.addRow("Parcela atual:", self.parcela_atual_input)
         form.addRow("Parcelas totais:", self.parcelas_totais_input)
@@ -117,6 +121,8 @@ class CreditCardExpenseDialog(QDialog):
         salvar = QPushButton(
             "Adicionar" if self.mode == "create" else "Salvar"
         )
+        salvar.setDefault(True)
+        salvar.setAutoDefault(True)
 
         cancelar.clicked.connect(self.reject)
         salvar.clicked.connect(self.accept)
@@ -128,7 +134,7 @@ class CreditCardExpenseDialog(QDialog):
 
     def _preencher_dados(self) -> None:
         if self.mode == "create" or self.row_data is None:
-            self.data_input.setDate(QDate.currentDate())
+            self.data_input.set_date(QDate.currentDate())
             return
 
         self.descricao_input.setText(
@@ -137,7 +143,7 @@ class CreditCardExpenseDialog(QDialog):
 
         dia, mes = self.row_data["date"].split("/")
 
-        self.data_input.setDate(
+        self.data_input.set_date(
             QDate(
                 int(self.invoice_year),
                 int(mes),
@@ -160,6 +166,9 @@ class CreditCardExpenseDialog(QDialog):
 
         if categoria_index >= 0:
             self.categoria_input.setCurrentIndex(categoria_index)
+        self.subcategoria_input.setText(
+            self.row_data.get("subcategory") or ""
+        )
 
         installment_number = self.row_data.get("installment_number", 1)
         installment_total = self.row_data.get("installment_total", 1)
@@ -195,10 +204,80 @@ class CreditCardExpenseDialog(QDialog):
 
         return {
             "category_id": self.categoria_input.currentData(),
+            "subcategory": self.subcategoria_input.text().strip(),
             "effective_description": self.descricao_input.text().strip(),
-            "effective_purchase_date": self.data_input.date().toString("yyyy-MM-dd"),
+            "effective_purchase_date": self.data_input.to_iso_date(self.invoice_year),
             "effective_amount_cents": int(round(self.valor_input.value() * 100)),
             "notes": self.observacoes_input.toPlainText().strip(),
             "installment_number": self.parcela_atual_input.value() if parcelado else 1,
             "installment_total": self.parcelas_totais_input.value() if parcelado else 1,
         }
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.accept()
+            return
+
+        super().keyPressEvent(event)
+
+    def _aplicar_estilo(self) -> None:
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f8fafc;
+            }
+
+            QLabel {
+                color: #334155;
+                font-size: 13px;
+            }
+
+            QLineEdit,
+            QComboBox,
+            QDoubleSpinBox,
+            QSpinBox,
+            QTextEdit {
+                background-color: white;
+                border: 1px solid #cbd5e1;
+                border-radius: 10px;
+                padding: 7px 10px;
+                font-size: 13px;
+                color: #0f172a;
+            }
+
+            QLineEdit:focus,
+            QComboBox:focus,
+            QDoubleSpinBox:focus,
+            QSpinBox:focus,
+            QTextEdit:focus {
+                border: 1px solid #2563eb;
+            }
+
+            QCheckBox {
+                color: #0f172a;
+                font-size: 13px;
+                spacing: 8px;
+            }
+
+            QPushButton {
+                border: none;
+                border-radius: 10px;
+                padding: 9px 18px;
+                font-size: 13px;
+                font-weight: 600;
+                background-color: #e2e8f0;
+                color: #0f172a;
+            }
+
+            QPushButton:hover {
+                background-color: #cbd5e1;
+            }
+
+            QPushButton:default {
+                background-color: #2563eb;
+                color: white;
+            }
+
+            QPushButton:default:hover {
+                background-color: #1d4ed8;
+            }
+        """)
