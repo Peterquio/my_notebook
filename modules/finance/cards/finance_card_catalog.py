@@ -37,7 +37,7 @@ FINANCE_CARD_CATALOG = [
     {
         "id": "subscriptions",
         "title": "Assinaturas",
-        "size": "2x1",
+        "size": "1x1",
         "icon": "🔁",
         "group": "module",
     },

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout,
     QVBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView,
-    QGridLayout,
+    QGridLayout,  QSizePolicy,
 )
 
 from modules.finance.services.importers.credit_card_import_service import (
@@ -154,23 +154,11 @@ class CreditCardInvoicePage(QWidget):
         layout = QHBoxLayout()
         layout.setSpacing(12)
 
-        voltar = QPushButton("←")
-        voltar.setFixedSize(38, 38)
-        voltar.clicked.connect(
-            self.back_requested.emit
-        )
-
-        layout.addWidget(voltar)
-
-        reprocessar = QPushButton("↻ Reprocessar")
-        reprocessar.clicked.connect(
-            self._reprocessar_faturas
-        )
-
-        layout.addWidget(reprocessar)
+        titulo_area = QVBoxLayout()
+        titulo_area.setSpacing(2)
 
         titulo = QLabel(
-            f"Cartão de Crédito {self.credit_card['name']}"
+            self.credit_card["name"]
         )
         titulo.setStyleSheet(
             """
@@ -180,28 +168,22 @@ class CreditCardInvoicePage(QWidget):
             """
         )
 
-        selo = QLabel("Platinum")
-        selo.setAlignment(Qt.AlignCenter)
-        selo.setFixedSize(64, 24)
-        selo.setStyleSheet(
-            """
-            background-color: #f3e8ff;
-            color: #6d28d9;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            """
+        subtitulo = QLabel("Cartão de Crédito • Platinum")
+        subtitulo.setStyleSheet(
+            "font-size: 12px; color: #64748b;"
         )
 
+        titulo_area.addWidget(titulo)
+        titulo_area.addWidget(subtitulo)
+
         atualizado = QLabel(
-            "Atualizado em 08/06/2026 às 09:30  ↻"
+            "Atualizado em 08/06/2026 às 09:30"
         )
         atualizado.setStyleSheet(
             "font-size: 12px; color: #64748b;"
         )
 
-        layout.addWidget(titulo)
-        layout.addWidget(selo)
+        layout.addLayout(titulo_area)
         layout.addStretch()
         layout.addWidget(atualizado)
 
@@ -209,27 +191,75 @@ class CreditCardInvoicePage(QWidget):
 
     def _criar_cards_resumo(self) -> QGridLayout:
         layout = QGridLayout()
-        layout.setSpacing(10)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(10)
 
         cards = self.detail_service.montar_cards_resumo_fatura(
             credit_card=self.credit_card,
             invoice_data=self.invoice_data,
         )
 
+        cards.append(
+            {
+                "icon": "+",
+                "title": "Novo lançamento",
+                "value": "Adicionar",
+                "subtitle": "Registrar despesa",
+                "action": self._abrir_dialog_novo_lancamento,
+            }
+        )
+
+        total_cards = len(cards)
+        columns = 6 if self.width() >= 1050 else 3
+
         for index, card_data in enumerate(cards):
-            row = index // 3
-            column = index % 3
+            row = index // columns
+            column = index % columns
+
+            card = self._criar_card_resumo(
+                card_data["icon"],
+                card_data["title"],
+                card_data["value"],
+                card_data["subtitle"],
+            )
+
+            if "action" in card_data:
+                card.setCursor(Qt.PointingHandCursor)
+                card.mousePressEvent = (
+                    lambda event, action=card_data["action"]: action()
+                )
+                card.setStyleSheet(
+                    """
+                    QFrame {
+                        background-color: #6d28d9;
+                        border: 1px solid #6d28d9;
+                        border-radius: 14px;
+                    }
+
+                    QFrame:hover {
+                        background-color: #5b21b6;
+                        border-color: #5b21b6;
+                    }
+                    """
+                )
+
+                for label in card.findChildren(QLabel):
+                    label.setStyleSheet(
+                        label.styleSheet()
+                        .replace("#0f172a", "white")
+                        .replace("#64748b", "#ede9fe")
+                        .replace("#6d28d9", "white")
+                        .replace("#f3e8ff", "#7c3aed")
+                    )
 
             layout.addWidget(
-                self._criar_card_resumo(
-                    card_data["icon"],
-                    card_data["title"],
-                    card_data["value"],
-                    card_data["subtitle"],
-                ),
+                card,
                 row,
                 column,
             )
+
+        for column in range(columns):
+            layout.setColumnStretch(column, 1)
 
         return layout
 
@@ -241,7 +271,11 @@ class CreditCardInvoicePage(QWidget):
             subtitle: str,
     ) -> QFrame:
         card = QFrame()
-        card.setMinimumHeight(68)
+        card.setMinimumHeight(56)
+        card.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
+        )
         card.setStyleSheet(
             """
             QFrame {
@@ -253,19 +287,19 @@ class CreditCardInvoicePage(QWidget):
         )
 
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(12, 7, 12, 7)
         layout.setSpacing(10)
 
         icon_label = QLabel(icon)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFixedSize(34, 34)
+        icon_label.setFixedSize(30, 30)
         icon_label.setStyleSheet(
             """
             QLabel {
                 background-color: #f3e8ff;
                 color: #6d28d9;
                 border: none;
-                border-radius: 17px;
+                border-radius: 15px;
                 font-size: 16px;
             }
             """
@@ -283,7 +317,7 @@ class CreditCardInvoicePage(QWidget):
         value_label.setStyleSheet(
             """
             border: none;
-            font-size: 17px;
+            font-size: 15px;
             font-weight: bold;
             color: #0f172a;
             """
@@ -366,28 +400,6 @@ class CreditCardInvoicePage(QWidget):
             self._abrir_dialog_vincular_conta
         )
 
-        novo = QPushButton("+  Novo lançamento")
-        novo.setFixedWidth(155)
-        novo.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #6d28d9;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-                padding: 10px 14px;
-            }
-
-            QPushButton:hover {
-                background-color: #5b21b6;
-            }
-            """
-        )
-        novo.clicked.connect(
-            self._abrir_dialog_novo_lancamento
-        )
-
         self.ordenar_combo = QComboBox()
         self.ordenar_combo.addItems(
             [
@@ -424,7 +436,6 @@ class CreditCardInvoicePage(QWidget):
         layout.addWidget(exportar)
         layout.addWidget(vincular_conta)
         layout.addWidget(self.ordenar_combo)
-        layout.addWidget(novo)
 
         return layout
 
