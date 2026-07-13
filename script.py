@@ -1,147 +1,381 @@
-import sqlite3
-import shutil
-from pathlib import Path
-from datetime import datetime
+import sys
+from datetime import date
+
+from dateutil.relativedelta import relativedelta
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
+)
+
+from modules.finance.graphs.canvas.bar_chart_canvas import (
+    BarChartCanvas,
+)
+
+from modules.finance.graphs.canvas.graph_slice import (
+    GraphSlice,
+)
+
+from modules.finance.services.finance_graph_service import (
+    FinanceGraphService,
+)
 
 
-DB_PATH = Path("user_data/users/default.db")  # ajuste se seu banco estiver em outro caminho
-
-GRUPOS_PARA_MESCLAR = [
-    {
-        "nome": "Meia Umbreon",
-        "grupo_correto": "1|shopee *shpstecnologia|2549|10|2026-02|occurrence:1|occurrence:1",
-        "grupo_errado": "1|shopee *shpstecnologia|2549|10|2026-02|occurrence:1",
-    },
-    {
-        "nome": "Meia Espeon",
-        "grupo_correto": "1|shopee *shpstecnologia|2549|10|2026-02|occurrence:1|occurrence:2",
-        "grupo_errado": "1|shopee *shpstecnologia|2549|10|2026-02|occurrence:2",
-    },
-]
+USERNAME = "default"
 
 
-def backup_db():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = DB_PATH.with_name(f"{DB_PATH.stem}_backup_corrigir_parcelas_{timestamp}{DB_PATH.suffix}")
-    shutil.copy2(DB_PATH, backup_path)
-    print(f"Backup criado em: {backup_path}")
+def formatar_moeda(
+        value_cents: int,
+) -> str:
 
-
-def listar(conn, grupo_id):
-    return conn.execute(
-        """
-        SELECT id, effective_description, billing_date, installment_number,
-               installment_total, effective_amount_cents, source_type,
-               installment_group_id
-        FROM finance_credit_card_expenses
-        WHERE installment_group_id = ?
-        ORDER BY installment_number, billing_date, id
-        """,
-        (grupo_id,),
-    ).fetchall()
-
-
-def corrigir_grupo(conn, nome, grupo_correto, grupo_errado):
-    print("\n" + "=" * 80)
-    print(f"Corrigindo: {nome}")
-
-    corretos = listar(conn, grupo_correto)
-    errados = listar(conn, grupo_errado)
-
-    print(f"Registros no grupo correto: {len(corretos)}")
-    print(f"Registros no grupo errado:  {len(errados)}")
-
-    ids_para_deletar = []
-
-    for errado in errados:
-        (
-            errado_id,
-            _desc,
-            billing_date,
-            installment_number,
-            installment_total,
-            amount,
-            source_type,
-            _gid,
-        ) = errado
-
-        duplicado = conn.execute(
-            """
-            SELECT id
-            FROM finance_credit_card_expenses
-            WHERE installment_group_id = ?
-              AND billing_date = ?
-              AND installment_number = ?
-              AND installment_total = ?
-              AND effective_amount_cents = ?
-            LIMIT 1
-            """,
-            (
-                grupo_correto,
-                billing_date,
-                installment_number,
-                installment_total,
-                amount,
-            ),
-        ).fetchone()
-
-        if duplicado and source_type == "projected_installment":
-            ids_para_deletar.append(errado_id)
-
-    print(f"Parcelas projetadas duplicadas para apagar: {ids_para_deletar}")
-
-    if ids_para_deletar:
-        placeholders = ",".join("?" for _ in ids_para_deletar)
-        conn.execute(
-            f"""
-            DELETE FROM finance_credit_card_expenses
-            WHERE id IN ({placeholders})
-            """,
-            ids_para_deletar,
-        )
-
-    conn.execute(
-        """
-        UPDATE finance_credit_card_expenses
-        SET installment_group_id = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE installment_group_id = ?
-        """,
-        (grupo_correto, grupo_errado),
+    value = (
+        value_cents
+        / 100
     )
 
-    print("Grupo errado mesclado no grupo correto.")
+    return (
+        f"R$ {value:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
 
 
-def main():
-    if not DB_PATH.exists():
-        raise FileNotFoundError(f"Banco não encontrado: {DB_PATH}")
+def formatar_data(
+        data_iso: str,
+) -> str:
 
-    backup_db()
+    ano, mes, dia = data_iso.split("-")
 
-    conn = sqlite3.connect(DB_PATH)
+    return f"{dia}/{mes}/{ano}"
 
-    try:
-        conn.execute("BEGIN")
 
-        for item in GRUPOS_PARA_MESCLAR:
-            corrigir_grupo(
-                conn,
-                item["nome"],
-                item["grupo_correto"],
-                item["grupo_errado"],
+def criar_graph_slices(
+        categories: list[dict],
+) -> list[GraphSlice]:
+
+    slices = []
+
+    for category in categories:
+        value = int(
+            category.get("amount_cents")
+            or 0
+        )
+
+        if value <= 0:
+            continue
+
+        slices.append(
+            GraphSlice(
+                label=category.get(
+                    "name",
+                    "Sem categoria",
+                ),
+                value=value,
+                color=category.get(
+                    "color",
+                    "#94A3B8",
+                ),
+                metadata={
+                    "category_id": category.get(
+                        "category_id"
+                    ),
+                    "items_count": category.get(
+                        "items_count",
+                        0,
+                    ),
+                    "items": category.get(
+                        "items",
+                        [],
+                    ),
+                    "is_uncategorized": category.get(
+                        "is_uncategorized",
+                        False,
+                    ),
+                },
+            )
+        )
+
+    return slices
+
+
+class GraphTestWindow(QMainWindow):
+    def __init__(
+            self,
+            title: str,
+            result: dict,
+            parent=None,
+    ) -> None:
+
+        super().__init__(
+            parent
+        )
+
+        self.result = result
+        self.graph_data = result["data"]
+
+        self.setWindowTitle(
+            title
+        )
+
+        self.resize(
+            1100,
+            680,
+        )
+
+        self._criar_interface()
+
+    def _criar_interface(
+            self,
+    ) -> None:
+
+        central_widget = QWidget()
+
+        layout = QVBoxLayout(
+            central_widget
+        )
+
+        layout.setContentsMargins(
+            24,
+            20,
+            24,
+            24,
+        )
+
+        layout.setSpacing(
+            10
+        )
+
+        periodo_label = QLabel(
+            (
+                f"{formatar_data(self.graph_data['start_date'])}"
+                f" até "
+                f"{formatar_data(self.graph_data['end_date'])}"
+            )
+        )
+
+        periodo_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        periodo_label.setStyleSheet(
+            """
+            QLabel {
+                color: #475569;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            """
+        )
+
+        resumo_label = QLabel(
+            (
+                f"Entradas: "
+                f"{formatar_moeda(self.graph_data['income_cents'])}"
+                f"    |    "
+                f"Gastos: "
+                f"{formatar_moeda(self.graph_data['expense_cents'])}"
+            )
+        )
+
+        resumo_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        resumo_label.setStyleSheet(
+            """
+            QLabel {
+                color: #0f172a;
+                font-size: 17px;
+                font-weight: 700;
+                padding-bottom: 8px;
+            }
+            """
+        )
+
+        self.canvas = BarChartCanvas()
+
+        self.canvas.set_data(
+            criar_graph_slices(
+                self.graph_data["categories"]
+            )
+        )
+
+        self.canvas.slice_clicked.connect(
+            self._mostrar_categoria_clicada
+        )
+
+        layout.addWidget(
+            periodo_label
+        )
+
+        layout.addWidget(
+            resumo_label
+        )
+
+        layout.addWidget(
+            self.canvas,
+            1,
+        )
+
+        self.setCentralWidget(
+            central_widget
+        )
+
+    def _mostrar_categoria_clicada(
+            self,
+            graph_slice: GraphSlice,
+    ) -> None:
+
+        print()
+        print("=" * 80)
+        print(
+            f"CATEGORIA: {graph_slice.label}"
+        )
+        print("=" * 80)
+
+        print(
+            "Total:",
+            formatar_moeda(
+                graph_slice.value
+            ),
+        )
+
+        print(
+            "Quantidade de itens:",
+            graph_slice.metadata.get(
+                "items_count",
+                0,
+            ),
+        )
+
+        for item in graph_slice.metadata.get(
+                "items",
+                [],
+        ):
+            print(
+                "   ",
+                item.get("date"),
+                "|",
+                item.get("description"),
+                "|",
+                formatar_moeda(
+                    int(
+                        item.get("amount_cents")
+                        or 0
+                    )
+                ),
+                "|",
+                item.get("source"),
             )
 
-        conn.commit()
-        print("\nCorreção concluída com sucesso.")
 
-    except Exception:
-        conn.rollback()
-        print("\nErro encontrado. Nada foi salvo.")
-        raise
+def obter_competencias_teste(
+        service: FinanceGraphService,
+) -> tuple[dict, dict]:
 
-    finally:
-        conn.close()
+    configuracao_atual = (
+        service.obter_configuracao_padrao()
+    )
+
+    data_competencia_atual = date(
+        configuracao_atual["selected_year"],
+        configuracao_atual["selected_month"],
+        1,
+    )
+
+    data_competencia_anterior = (
+        data_competencia_atual
+        + relativedelta(months=-1)
+    )
+
+    configuracao_anterior = {
+        "graph_id": "expenses_by_category",
+        "visualization": "bar",
+        "selected_year": (
+            data_competencia_anterior.year
+        ),
+        "selected_month": (
+            data_competencia_anterior.month
+        ),
+    }
+
+    configuracao_atual = {
+        **configuracao_atual,
+        "visualization": "bar",
+    }
+
+    return (
+        configuracao_atual,
+        configuracao_anterior,
+    )
+
+
+def main() -> None:
+    app = QApplication(
+        sys.argv
+    )
+
+    service = FinanceGraphService(
+        username=USERNAME
+    )
+
+    (
+        configuracao_atual,
+        configuracao_anterior,
+    ) = obter_competencias_teste(
+        service
+    )
+
+    resultado_atual = service.carregar_grafico(
+        configuracao_atual
+    )
+
+    resultado_anterior = service.carregar_grafico(
+        configuracao_anterior
+    )
+
+    config_atual = resultado_atual["config"]
+    config_anterior = resultado_anterior["config"]
+
+    janela_atual = GraphTestWindow(
+        title=(
+            "Gráfico real — período atual "
+            f"{config_atual['selected_month']:02d}/"
+            f"{config_atual['selected_year']}"
+        ),
+        result=resultado_atual,
+    )
+
+    janela_anterior = GraphTestWindow(
+        title=(
+            "Gráfico real — período anterior "
+            f"{config_anterior['selected_month']:02d}/"
+            f"{config_anterior['selected_year']}"
+        ),
+        result=resultado_anterior,
+    )
+
+    janela_atual.move(
+        80,
+        80,
+    )
+
+    janela_anterior.move(
+        160,
+        130,
+    )
+
+    janela_atual.show()
+    janela_anterior.show()
+
+    sys.exit(
+        app.exec()
+    )
 
 
 if __name__ == "__main__":

@@ -471,6 +471,7 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
 
     cycle_id INTEGER NOT NULL,
     account_id INTEGER,
+    category_id INTEGER,
     external_reference TEXT,
     description TEXT NOT NULL,
 
@@ -495,7 +496,11 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
         REFERENCES finance_balance_cycles(id),
 
     FOREIGN KEY (account_id)
-        REFERENCES finance_balance_accounts(id)
+        REFERENCES finance_balance_accounts(id),
+
+    FOREIGN KEY (category_id)
+        REFERENCES finance_categories(id)
+);
 );
 
 CREATE TABLE IF NOT EXISTS finance_monthly_templates (
@@ -556,6 +561,7 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
 
     account_id INTEGER,
     credit_card_id INTEGER,
+    category_id INTEGER,
 
     external_reference TEXT,
 
@@ -577,7 +583,10 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
         REFERENCES finance_balance_accounts(id),
 
     FOREIGN KEY (credit_card_id)
-        REFERENCES finance_credit_cards(id)
+        REFERENCES finance_credit_cards(id),
+
+    FOREIGN KEY (category_id)
+        REFERENCES finance_categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS finance_calculator_simulations (
@@ -623,4 +632,12 @@ CREATE TABLE IF NOT EXISTS finance_calculator_simulation_items (
     FOREIGN KEY (simulation_id)
         REFERENCES finance_calculator_simulations(id)
 );
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_balance_income_entries_category_id
+ON finance_balance_income_entries(category_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_balance_commitments_category_id
+ON finance_balance_commitments(category_id);
 """
