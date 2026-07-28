@@ -501,7 +501,6 @@ CREATE TABLE IF NOT EXISTS finance_balance_income_entries (
     FOREIGN KEY (category_id)
         REFERENCES finance_categories(id)
 );
-);
 
 CREATE TABLE IF NOT EXISTS finance_monthly_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
