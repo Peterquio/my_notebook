@@ -22,3 +22,5 @@ dist/
 build/
 *.exe
 config.txt
+**/credentials.json
+**/token.json

@@ -50,6 +50,27 @@ class Sidebar(QFrame):
             self.buttons[module_name] = button
 
         self.layout.addStretch()
+
+        settings_button = QPushButton(
+            "Configurações"
+        )
+        settings_button.setCheckable(True)
+        settings_button.setObjectName(
+            "SidebarButton"
+        )
+        settings_button.clicked.connect(
+            lambda checked=False:
+            self._navegar("settings")
+        )
+
+        self.layout.addWidget(
+            settings_button
+        )
+
+        self.buttons["settings"] = (
+            settings_button
+        )
+
         self._atualizar_botao_selecionado()
 
     def _navegar(self, module_name: str) -> None:

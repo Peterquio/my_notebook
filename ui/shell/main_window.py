@@ -17,6 +17,7 @@ from modules.tasker.ui.tasker_home import TaskerHome
 from modules.planner.ui.planner_home import PlannerHome
 from modules.diary.ui.diary_home import DiaryHome
 from modules.calendar.ui.calendar_home import CalendarHome
+from modules.settings.ui.settings_home import SettingsHome
 
 
 class MainWindow(QMainWindow):
@@ -84,6 +85,11 @@ class MainWindow(QMainWindow):
         self.navigation_manager.registrar_tela(
             "calendar",
             lambda: CalendarHome(),
+        )
+
+        self.navigation_manager.registrar_tela(
+            "settings",
+            lambda: SettingsHome(),
         )
 
     def _navegar_para(self, nome_tela: str) -> None:
@@ -316,5 +322,100 @@ class MainWindow(QMainWindow):
             #ScreenScroll {{
                 border: none;
                 background-color: transparent;
+            }}
+            
+            #SettingsHome {{
+                background-color: #f8fafc;
+            }}
+
+            #SettingsSection {{
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 18px;
+            }}
+
+            #SettingsSectionTitle {{
+                color: #0f172a;
+                font-size: 17px;
+                font-weight: 700;
+                border: none;
+            }}
+
+            #SettingsSectionDescription {{
+                color: #64748b;
+                font-size: 13px;
+                border: none;
+            }}
+
+            #SettingsStatusContainer {{
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+            }}
+
+            #SettingsStatusLabel {{
+                color: #334155;
+                font-size: 13px;
+                font-weight: 600;
+                border: none;
+            }}
+
+            #SettingsBackupInfo {{
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+            }}
+
+            #SettingsInfoLabel {{
+                color: #64748b;
+                font-size: 13px;
+                border: none;
+            }}
+
+            #SettingsPrimaryButton {{
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+
+            #SettingsPrimaryButton:hover {{
+                background-color: #1d4ed8;
+            }}
+
+            #SettingsSecondaryButton {{
+                background-color: #e2e8f0;
+                color: #334155;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+
+            #SettingsSecondaryButton:hover {{
+                background-color: #cbd5e1;
+            }}
+
+            #SettingsSecondaryButton:disabled {{
+                background-color: #f1f5f9;
+                color: #94a3b8;
+            }}
+
+            #SettingsDangerButton {{
+                background-color: #fee2e2;
+                color: #b91c1c;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+
+            #SettingsDangerButton:hover {{
+                background-color: #fecaca;
             }}
         """)
