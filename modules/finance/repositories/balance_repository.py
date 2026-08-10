@@ -64,7 +64,7 @@ class BalanceRepository:
 
     def criar_receita(
             self,
-            cycle_id: int,
+            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             expected_date: str,

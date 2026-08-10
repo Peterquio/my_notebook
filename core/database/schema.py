@@ -588,6 +588,50 @@ CREATE TABLE IF NOT EXISTS finance_balance_commitments (
         REFERENCES finance_categories(id)
 );
 
+CREATE TABLE IF NOT EXISTS finance_pix_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    account_id INTEGER NOT NULL,
+
+    transaction_type TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+
+    transaction_date TEXT NOT NULL,
+
+    contact_id INTEGER,
+    contact_name TEXT,
+
+    category_id INTEGER DEFAULT 1,
+
+    description TEXT,
+    notes TEXT,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (account_id)
+        REFERENCES finance_balance_accounts(id),
+
+    FOREIGN KEY (category_id)
+        REFERENCES finance_categories(id)
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_pix_transactions_account_id
+ON finance_pix_transactions(account_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_pix_transactions_date
+ON finance_pix_transactions(transaction_date);
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_pix_transactions_type
+ON finance_pix_transactions(transaction_type);
+
+CREATE INDEX IF NOT EXISTS
+idx_finance_pix_transactions_category_id
+ON finance_pix_transactions(category_id);
+
 CREATE TABLE IF NOT EXISTS finance_calculator_simulations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 

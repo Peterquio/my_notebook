@@ -14,6 +14,7 @@ from modules.finance.services.balance_account_service import BalanceAccountServi
 from modules.finance.repositories.finance_settings_repository import FinanceSettingsRepository
 from modules.finance.ui.subscriptions_page import SubscriptionsPage
 from modules.finance.ui.calculator_window import CalculatorWindow
+from modules.finance.ui.pix_window import PixWindow
 from core.shared.dashboard.dashboard_home_base import DashboardHomeBase
 from core.dashboard.services.dashboard_layout_service import DashboardLayoutService
 from core.dashboard.services.dashboard_card_service import DashboardCardService
@@ -190,6 +191,11 @@ class FinanceHome(DashboardHomeBase):
 
             if item["card_type"] == "calculator":
                 self._conectar_abertura_card_calculadora(
+                    slot
+                )
+
+            if item["card_type"] == "pix_sheet":
+                self._conectar_abertura_card_pix(
                     slot
                 )
 
@@ -398,6 +404,48 @@ class FinanceHome(DashboardHomeBase):
             )
         )
 
+    def _abrir_pix(
+            self,
+            slot,
+    ) -> None:
+
+        if self.edit_mode:
+            return
+
+        self.pix_window = PixWindow(
+            username=self.username,
+            parent=self.window(),
+        )
+
+        self.pix_window.back_requested.connect(
+            self._voltar_para_dashboard_financeiro
+        )
+
+        self.pix_window.data_changed.connect(
+            self._recarregar_dashboard
+        )
+
+        self.window().entrar_modo_foco(
+            self.pix_window
+        )
+
+    def _conectar_abertura_card_pix(
+            self,
+            slot,
+    ) -> None:
+
+        try:
+            slot.clicked.disconnect()
+        except RuntimeError:
+            pass
+
+        slot.clicked.connect(
+            lambda current_slot=slot:
+            self._abrir_pix(
+                current_slot
+            )
+        )
+
     def _abrir_calculadora(
             self,
             slot,
@@ -472,6 +520,12 @@ class FinanceHome(DashboardHomeBase):
 
         if card_type == "calculator":
             self._conectar_abertura_card_calculadora(
+                slot
+            )
+            return
+
+        if card_type == "pix_sheet":
+            self._conectar_abertura_card_pix(
                 slot
             )
             return

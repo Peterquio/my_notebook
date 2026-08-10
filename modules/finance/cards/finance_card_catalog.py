@@ -29,8 +29,8 @@ FINANCE_CARD_CATALOG = [
     },
     {
         "id": "pix_sheet",
-        "title": "Pix do Mês",
-        "size": "1x3",
+        "title": "PIX",
+        "size": "2x1",
         "icon": "💸",
         "group": "module",
     },

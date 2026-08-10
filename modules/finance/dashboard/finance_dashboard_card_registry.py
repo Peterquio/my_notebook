@@ -1,12 +1,8 @@
 from modules.finance.dashboard.finance_dashboard_card_handlers import (
     GenericFinanceDashboardCardHandler,
     CreditCardFinanceDashboardCardHandler,
-)
-
-from modules.finance.dashboard.finance_dashboard_card_handlers import (
-    GenericFinanceDashboardCardHandler,
-    CreditCardFinanceDashboardCardHandler,
     AccountBalanceFinanceDashboardCardHandler,
+    PixFinanceDashboardCardHandler,
 )
 
 class FinanceDashboardCardRegistry:
@@ -31,6 +27,11 @@ class FinanceDashboardCardRegistry:
             )
 
         self.handlers["account_balance"] = AccountBalanceFinanceDashboardCardHandler(
+            card_generator=card_generator,
+            username=username,
+        )
+
+        self.handlers["pix_sheet"] = PixFinanceDashboardCardHandler(
             card_generator=card_generator,
             username=username,
         )

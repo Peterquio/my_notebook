@@ -1,13 +1,11 @@
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
-from PySide6.QtWidgets import QFrame
 
-from modules.finance.services.bank_account_asset_resolver import (
-    BankAccountAssetResolver,
-)
+from ui.widgets.card_shadow_frame import CardShadowFrame
+from modules.finance.services.bank_account_asset_resolver import BankAccountAssetResolver
 
 
-class BankAccountWidget(QFrame):
+class BankAccountWidget(CardShadowFrame):
     ACCOUNT_KIND_LABELS = {
         "checking": "Conta corrente",
         "savings": "Conta poupança",
@@ -275,12 +273,3 @@ class BankAccountWidget(QFrame):
             return data_iso
 
         return f"{partes[2]}/{partes[1]}"
-
-    def set_hovered(self, hovered: bool) -> None:
-        pass
-
-    def set_pressed(self, pressed: bool) -> None:
-        pass
-
-    def set_dragging(self, dragging: bool) -> None:
-        pass

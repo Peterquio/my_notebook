@@ -4,22 +4,11 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 from modules.finance.ui.dialogs.credit_card_setup_dialog import CreditCardSetupDialog
-
-from modules.finance.ui.dialogs.bank_account_setup_dialog import (
-    BankAccountSetupDialog,
-)
-
-from modules.finance.services.balance_service import (
-    BalanceService,
-)
-
-from modules.finance.repositories.finance_settings_repository import (
-    FinanceSettingsRepository,
-)
-
-from modules.finance.services.balance_account_service import (
-    BalanceAccountService,
-)
+from modules.finance.ui.dialogs.bank_account_setup_dialog import BankAccountSetupDialog
+from modules.finance.services.balance_service import BalanceService
+from modules.finance.repositories.finance_settings_repository import FinanceSettingsRepository
+from modules.finance.services.balance_account_service import BalanceAccountService
+from modules.finance.services.pix_service import PixService
 
 class GenericFinanceDashboardCardHandler:
     def __init__(
@@ -292,3 +281,73 @@ class AccountBalanceFinanceDashboardCardHandler(GenericFinanceDashboardCardHandl
         fim = inicio + relativedelta(months=1) - relativedelta(days=1)
 
         return inicio.isoformat(), fim.isoformat()
+
+class PixFinanceDashboardCardHandler(
+    GenericFinanceDashboardCardHandler
+):
+    def __init__(
+            self,
+            card_generator,
+            username: str,
+    ) -> None:
+
+        super().__init__(
+            card_generator
+        )
+
+        self.username = username
+
+        self.pix_service = PixService(
+            username
+        )
+
+    def create_new_card_data(
+            self,
+            template_data: dict,
+    ) -> dict:
+
+        card_data = super().create_new_card_data(
+            template_data
+        )
+
+        card_data["config"].update(
+            self._obter_config_resumo()
+        )
+
+        return card_data
+
+    def hydrate_card_data(
+            self,
+            layout_item: dict,
+            template_data: dict,
+    ) -> dict:
+
+        card_data = super().hydrate_card_data(
+            layout_item,
+            template_data,
+        )
+
+        card_data["config"].update(
+            self._obter_config_resumo()
+        )
+
+        return card_data
+
+    def _obter_config_resumo(
+            self,
+    ) -> dict:
+
+        resumo = (
+            self.pix_service
+            .obter_resumo_periodo_atual()
+        )
+
+        return {
+            "start_date": resumo["start_date"],
+            "end_date": resumo["end_date"],
+            "sent_cents": resumo["sent_cents"],
+            "received_cents": resumo["received_cents"],
+            "total_transactions": resumo[
+                "total_transactions"
+            ],
+        }

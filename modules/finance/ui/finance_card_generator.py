@@ -7,10 +7,9 @@ from ui.widgets.card_slot import CardSlot
 from modules.finance.ui.widget.credit_card_widget import CreditCardWidget
 from modules.finance.services.balance_service import BalanceService
 from modules.finance.ui.widget.bank_account_widget import BankAccountWidget
+from modules.finance.ui.widget.pix_widget import PixWidget
+from modules.finance.repositories.finance_settings_repository import FinanceSettingsRepository
 
-from modules.finance.repositories.finance_settings_repository import (
-    FinanceSettingsRepository,
-)
 
 def obter_periodo_financeiro_padrao(username: str = "default") -> tuple[str, str]:
     settings_repository = FinanceSettingsRepository(username)
@@ -83,9 +82,13 @@ def gerar_card_financeiro(
             ),
             icon="💰",
         )
-
     elif card_data.get("card_type") == "account_balance":
         card = BankAccountWidget(
+            card_data
+        )
+
+    elif card_data.get("card_type") == "pix_sheet":
+        card = PixWidget(
             card_data
         )
 

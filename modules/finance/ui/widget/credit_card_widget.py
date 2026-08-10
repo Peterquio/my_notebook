@@ -1,13 +1,11 @@
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
-from PySide6.QtWidgets import QFrame
 
-from modules.finance.services.credit_card_asset_resolver import (
-    CreditCardAssetResolver,
-)
+from ui.widgets.card_shadow_frame import CardShadowFrame
+from modules.finance.services.credit_card_asset_resolver import CreditCardAssetResolver
 
 
-class CreditCardWidget(QFrame):
+class CreditCardWidget(CardShadowFrame):
     def __init__(
             self,
             card_data: dict,
@@ -240,21 +238,3 @@ class CreditCardWidget(QFrame):
             y,
             scaled,
         )
-
-    def set_hovered(
-            self,
-            hovered: bool,
-    ) -> None:
-        pass
-
-    def set_pressed(
-            self,
-            pressed: bool,
-    ) -> None:
-        pass
-
-    def set_dragging(
-            self,
-            dragging: bool,
-    ) -> None:
-        pass

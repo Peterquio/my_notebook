@@ -19,6 +19,8 @@ class DashboardGrid(QWidget):
         cell_ratio: float = 0.70,
         spacing: int = 20,
         strategy: str = "free",
+        min_columns: int = 3,
+        max_columns: int = 6,
     ):
         super().__init__()
 
@@ -32,6 +34,8 @@ class DashboardGrid(QWidget):
             max_cell_width=max_cell_width,
             cell_ratio=cell_ratio,
             spacing=spacing,
+            min_columns=min_columns,
+            max_columns=max_columns,
         )
 
         self.renderer = DashboardRenderer(
