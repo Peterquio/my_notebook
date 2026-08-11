@@ -8,9 +8,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+from ui.widgets.card_shadow_frame import CardShadowFrame
 
-
-class PixTransactionCard(QFrame):
+class PixTransactionCard(CardShadowFrame):
     clicked = Signal(dict)
     delete_requested = Signal(dict)
 

@@ -8,7 +8,7 @@ class FinanceSettingsRepository:
     ) -> None:
         self.db = DatabaseManager(username)
 
-    def obter_reference_day(self) -> int:
+    def obter_reference_day(self) -> int | None:
         conn = self.db.get_connection()
 
         try:
@@ -23,9 +23,14 @@ class FinanceSettingsRepository:
             row = cursor.fetchone()
 
             if row is None:
-                return 1
+                return None
 
-            return row["finance_reference_day"] or 1
+            value = row["finance_reference_day"]
+
+            if value is None:
+                return None
+
+            return int(value)
 
         finally:
             conn.close()

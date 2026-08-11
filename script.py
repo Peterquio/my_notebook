@@ -4,55 +4,139 @@ from core.database.database_manager import DatabaseManager
 USERNAME = "default"
 
 
-def recriar_tabela_pix():
-    database = DatabaseManager(USERNAME)
+def apagar_ciclos_legados(
+        username: str = USERNAME,
+) -> None:
+
+    database = DatabaseManager(
+        username
+    )
+
     conexao = database.get_connection()
-    cursor = conexao.cursor()
 
-    print("Verificando tabela PIX...")
+    try:
+        conexao.execute(
+            "BEGIN"
+        )
 
-    cursor.execute(
-        """
-        SELECT name
-        FROM sqlite_master
-        WHERE type = 'table'
-          AND name = 'finance_pix_transactions'
-        """
-    )
+        # -------------------------------------------------
+        # 1. Remove os saldos de abertura ligados a ciclos
+        # -------------------------------------------------
 
-    tabela_existe = cursor.fetchone() is not None
+        cursor = conexao.execute(
+            """
+            DELETE FROM finance_balance_cycle_account_openings
+            """
+        )
 
-    if not tabela_existe:
-        print("Tabela finance_pix_transactions não existe.")
-        print("Nada precisa ser removido.")
-        return
+        print(
+            "Aberturas de ciclo removidas:",
+            cursor.rowcount,
+        )
 
-    cursor.execute(
-        """
-        PRAGMA table_info(finance_pix_transactions)
-        """
-    )
+        # -------------------------------------------------
+        # 2. Remove os ciclos
+        # -------------------------------------------------
 
-    colunas = [
-        row["name"]
-        for row in cursor.fetchall()
-    ]
+        cursor = conexao.execute(
+            """
+            DELETE FROM finance_balance_cycles
+            """
+        )
 
-    print(f"Colunas atuais: {colunas}")
+        print(
+            "Ciclos removidos:",
+            cursor.rowcount,
+        )
 
-    cursor.execute(
-        """
-        DROP TABLE finance_pix_transactions
-        """
-    )
+        # -------------------------------------------------
+        # 3. Validação
+        # -------------------------------------------------
 
-    conexao.commit()
+        cursor = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM finance_balance_cycles
+            """
+        )
 
-    print()
-    print("Tabela finance_pix_transactions removida com sucesso.")
-    print("Abra o My Notebook novamente.")
-    print("O GLOBAL_SCHEMA criará a nova versão da tabela PIX.")
+        total_ciclos = cursor.fetchone()["total"]
+
+        cursor = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM finance_balance_cycle_account_openings
+            """
+        )
+
+        total_aberturas = cursor.fetchone()["total"]
+
+        cursor = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM finance_balance_income_entries
+            WHERE cycle_id IS NOT NULL
+            """
+        )
+
+        receitas_com_ciclo = cursor.fetchone()["total"]
+
+        cursor = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM finance_balance_commitments
+            WHERE cycle_id IS NOT NULL
+            """
+        )
+
+        compromissos_com_ciclo = cursor.fetchone()["total"]
+
+        print()
+        print("Validação:")
+        print(
+            f"finance_balance_cycles: {total_ciclos}"
+        )
+        print(
+            "finance_balance_cycle_account_openings: "
+            f"{total_aberturas}"
+        )
+        print(
+            "Receitas com cycle_id: "
+            f"{receitas_com_ciclo}"
+        )
+        print(
+            "Compromissos com cycle_id: "
+            f"{compromissos_com_ciclo}"
+        )
+
+        if (
+                total_ciclos != 0
+                or total_aberturas != 0
+                or receitas_com_ciclo != 0
+                or compromissos_com_ciclo != 0
+        ):
+            raise RuntimeError(
+                "A limpeza de ciclos não ficou consistente."
+            )
+
+        conexao.commit()
+
+        print()
+        print(
+            "Ciclos legados removidos com sucesso."
+        )
+
+    except Exception:
+        conexao.rollback()
+
+        print()
+        print(
+            "Erro encontrado. "
+            "Nenhuma alteração foi mantida."
+        )
+
+        raise
 
 
 if __name__ == "__main__":
-    recriar_tabela_pix()
+    apagar_ciclos_legados()

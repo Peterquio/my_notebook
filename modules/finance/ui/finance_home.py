@@ -79,37 +79,42 @@ class FinanceHome(DashboardHomeBase):
         self._criar_widgets()
 
     def _garantir_onboarding_financeiro(self) -> None:
-        ciclos = self.balance_service.listar_ciclos()
+        settings_repository = FinanceSettingsRepository(
+            self.username
+        )
 
-        if ciclos:
+        reference_day = (
+            settings_repository
+            .obter_reference_day()
+        )
+
+        if reference_day is not None:
             return
 
         welcome_dialog = FinanceWelcomeDialog(
             parent=self,
         )
 
-        if welcome_dialog.exec() != FinanceWelcomeDialog.Accepted:
+        if (
+                welcome_dialog.exec()
+                != FinanceWelcomeDialog.Accepted
+        ):
             return
 
         cycle_dialog = BalanceInitialCycleDialog(
             parent=self,
         )
 
-        if cycle_dialog.exec() != BalanceInitialCycleDialog.Accepted:
+        if (
+                cycle_dialog.exec()
+                != BalanceInitialCycleDialog.Accepted
+        ):
             return
 
         dados = cycle_dialog.obter_dados()
 
-        FinanceSettingsRepository(
-            self.username
-        ).salvar_reference_day(
+        settings_repository.salvar_reference_day(
             dados["reference_day"]
-        )
-
-        self.balance_service.criar_ciclo(
-            name=dados["name"],
-            start_date=dados["start_date"],
-            end_date=dados["end_date"],
         )
 
     def _criar_widgets(self) -> None:
