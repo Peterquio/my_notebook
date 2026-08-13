@@ -1110,12 +1110,30 @@ class CreditCardInvoicePage(QWidget):
         dialog = CreditCardExpenseDialog(
             categories=self.categories,
             invoice_year=self.invoice_data["invoice_year"],
-            row_data=None,
-            mode="create",
+            row_data=row_data,
+            mode="edit",
             parent=self,
         )
 
-        if dialog.exec() != QDialog.Accepted:
+        exclusao_solicitada = {
+            "valor": False
+        }
+
+        dialog.delete_requested.connect(
+            lambda: exclusao_solicitada.update(
+                valor=True
+            )
+        )
+
+        resultado = dialog.exec()
+
+        if exclusao_solicitada["valor"]:
+            self._excluir_lancamento(
+                row_data=row_data,
+            )
+            return
+
+        if resultado != QDialog.Accepted:
             return
 
         dados_lancamento = dialog.obter_dados()
@@ -1169,13 +1187,40 @@ class CreditCardInvoicePage(QWidget):
             parent=self,
         )
 
-        if dialog.exec() != QDialog.Accepted:
+        exclusao_solicitada = {
+            "valor": False
+        }
+
+        dialog.delete_requested.connect(
+            lambda: exclusao_solicitada.update(
+                valor=True
+            )
+        )
+
+        resultado = dialog.exec()
+
+        # IMPORTANTE:
+        # verificar exclusão ANTES de verificar Accepted/Rejected
+        if exclusao_solicitada["valor"]:
+            self._excluir_lancamento(
+                row_data=row_data,
+            )
+            return
+
+        if resultado != QDialog.Accepted:
             return
 
         dados_lancamento = dialog.obter_dados()
 
-        dados_lancamento.pop("installment_number", None)
-        dados_lancamento.pop("installment_total", None)
+        dados_lancamento.pop(
+            "installment_number",
+            None,
+        )
+
+        dados_lancamento.pop(
+            "installment_total",
+            None,
+        )
 
         try:
             self.detail_service.atualizar_lancamento(
@@ -1192,11 +1237,14 @@ class CreditCardInvoicePage(QWidget):
             )
             return
 
-        self.invoice_data = self._carregar_fatura_selecionada()
+        self.invoice_data = (
+            self._carregar_fatura_selecionada()
+        )
 
         self._sincronizar_fatura_com_saldo()
 
         self._recarregar_tabela()
+
         self.data_changed.emit()
 
     def _abrir_dialog_vincular_conta(self) -> None:
@@ -1248,3 +1296,173 @@ class CreditCardInvoicePage(QWidget):
         )
 
         self.data_changed.emit()
+
+    def _excluir_lancamento(
+            self,
+            row_data: dict,
+    ) -> None:
+        expense_id = row_data.get("expense_id")
+
+        if expense_id is None:
+            QMessageBox.warning(
+                self,
+                "Não foi possível excluir",
+                "Este lançamento não possui ID no banco.",
+            )
+            return
+
+        try:
+            analise = (
+                self.detail_service.analisar_exclusao_lancamento(
+                    credit_card=self.credit_card,
+                    expense_id=expense_id,
+                )
+            )
+
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Não foi possível excluir",
+                str(erro),
+            )
+            return
+
+        if analise["adiantada"]:
+            QMessageBox.information(
+                self,
+                "Parcela adiantada",
+                "Para apagar parcelas adiantadas, primeiro é necessário "
+                "reajustar as parcelas extras dessa fatura para seu mês original.",
+            )
+            return
+
+        if not analise["parcelado"]:
+            self._confirmar_exclusao_lancamento_unico(
+                expense_id=expense_id,
+            )
+            return
+
+        self._escolher_exclusao_parcelamento(
+            expense_id=expense_id,
+            installment_number=analise["installment_number"],
+            installment_total=analise["installment_total"],
+        )
+
+    def _confirmar_exclusao_lancamento_unico(
+            self,
+            expense_id: int,
+    ) -> None:
+        resposta = QMessageBox.question(
+            self,
+            "Excluir lançamento",
+            "Deseja realmente excluir este lançamento?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        self._executar_exclusao_lancamento(
+            expense_id=expense_id,
+            modo="unico",
+        )
+
+    def _escolher_exclusao_parcelamento(
+            self,
+            expense_id: int,
+            installment_number: int,
+            installment_total: int,
+    ) -> None:
+        mensagem = QMessageBox(self)
+
+        mensagem.setWindowTitle(
+            "Excluir parcela"
+        )
+
+        mensagem.setIcon(
+            QMessageBox.Question
+        )
+
+        mensagem.setText(
+            f"Esta compra pertence a um parcelamento "
+            f"({installment_number}/{installment_total})."
+        )
+
+        mensagem.setInformativeText(
+            "Escolha o que deseja excluir."
+        )
+
+        botao_unico = mensagem.addButton(
+            "Apenas esta parcela",
+            QMessageBox.ActionRole,
+        )
+
+        botao_seguintes = mensagem.addButton(
+            "Esta e as seguintes",
+            QMessageBox.ActionRole,
+        )
+
+        botao_tudo = mensagem.addButton(
+            "Todo o parcelamento",
+            QMessageBox.DestructiveRole,
+        )
+
+        mensagem.addButton(
+            "Cancelar",
+            QMessageBox.RejectRole,
+        )
+
+        mensagem.exec()
+
+        botao_clicado = mensagem.clickedButton()
+
+        if botao_clicado == botao_unico:
+            modo = "unico"
+
+        elif botao_clicado == botao_seguintes:
+            modo = "deste_em_diante"
+
+        elif botao_clicado == botao_tudo:
+            modo = "parcelamento_inteiro"
+
+        else:
+            return
+
+        self._executar_exclusao_lancamento(
+            expense_id=expense_id,
+            modo=modo,
+        )
+
+    def _executar_exclusao_lancamento(
+            self,
+            expense_id: int,
+            modo: str,
+    ) -> None:
+        try:
+            self.detail_service.excluir_lancamento(
+                credit_card=self.credit_card,
+                expense_id=expense_id,
+                modo=modo,
+                reference_invoice_year=self.invoice_data["invoice_year"],
+                reference_invoice_month=self.invoice_data["invoice_month"],
+            )
+
+        except Exception as erro:
+            QMessageBox.warning(
+                self,
+                "Erro ao excluir lançamento",
+                str(erro),
+            )
+            return
+
+        self.invoice_data = (
+            self._carregar_fatura_selecionada()
+        )
+
+        self._sincronizar_fatura_com_saldo()
+
+        self._recarregar_tabela()
+
+        self.data_changed.emit()
+

@@ -778,3 +778,86 @@ class CreditCardExpenseRepository:
         )
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def cancelar_lancamento(
+            self,
+            expense_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status != 'cancelled'
+            """,
+            (expense_id,),
+        )
+
+        self.conexao.commit()
+
+    def cancelar_parcelamento_inteiro(
+            self,
+            installment_group_id: str,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE installment_group_id = ?
+              AND status != 'cancelled'
+            """,
+            (installment_group_id,),
+        )
+
+        self.conexao.commit()
+
+    def cancelar_parcelas_a_partir_de(
+            self,
+            installment_group_id: str,
+            installment_number: int,
+            invoice_year: int,
+            invoice_month: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_expenses
+            SET
+                status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id IN (
+                SELECT e.id
+                FROM finance_credit_card_expenses e
+                INNER JOIN finance_credit_card_invoices i
+                    ON i.id = e.invoice_id
+                WHERE e.installment_group_id = ?
+                  AND e.installment_number >= ?
+                  AND e.status != 'cancelled'
+                  AND (
+                        i.invoice_year > ?
+                        OR (
+                            i.invoice_year = ?
+                            AND i.invoice_month >= ?
+                        )
+                  )
+            )
+            """,
+            (
+                installment_group_id,
+                installment_number,
+                invoice_year,
+                invoice_year,
+                invoice_month,
+            ),
+        )
+
+        self.conexao.commit()

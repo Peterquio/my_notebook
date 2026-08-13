@@ -825,6 +825,208 @@ class CreditCardDetailService:
 
         return invoice["id"]
 
+    def analisar_exclusao_lancamento(
+            self,
+            credit_card: dict,
+            expense_id: int,
+    ) -> dict:
+        lancamento = self.expense_repository.buscar_por_id(
+            expense_id
+        )
+
+        if lancamento is None:
+            raise ValueError(
+                "Lançamento não encontrado."
+            )
+
+        parcelado = (
+            int(lancamento["installment_total"] or 1) > 1
+            and lancamento.get("installment_group_id") is not None
+        )
+
+        adiantada = False
+
+        if parcelado:
+            adiantada = self._parcela_esta_adiantada(
+                credit_card=credit_card,
+                lancamento=lancamento,
+            )
+
+        return {
+            "expense_id": lancamento["id"],
+            "parcelado": parcelado,
+            "adiantada": adiantada,
+            "installment_number": int(
+                lancamento["installment_number"] or 1
+            ),
+            "installment_total": int(
+                lancamento["installment_total"] or 1
+            ),
+            "installment_group_id": lancamento.get(
+                "installment_group_id"
+            ),
+        }
+
+    def excluir_lancamento(
+            self,
+            credit_card: dict,
+            expense_id: int,
+            modo: str,
+            reference_invoice_year: int,
+            reference_invoice_month: int,
+    ) -> None:
+        lancamento = self.expense_repository.buscar_por_id(
+            expense_id
+        )
+
+        if lancamento is None:
+            raise ValueError(
+                "Lançamento não encontrado."
+            )
+
+        modos_validos = {
+            "unico",
+            "deste_em_diante",
+            "parcelamento_inteiro",
+        }
+
+        if modo not in modos_validos:
+            raise ValueError(
+                f"Modo de exclusão inválido: {modo}"
+            )
+
+        installment_total = int(
+            lancamento["installment_total"] or 1
+        )
+
+        installment_group_id = lancamento.get(
+            "installment_group_id"
+        )
+
+        parcelado = (
+            installment_total > 1
+            and installment_group_id is not None
+        )
+
+        if not parcelado:
+            self.expense_repository.cancelar_lancamento(
+                expense_id=expense_id
+            )
+            return
+
+        if self._parcela_esta_adiantada(
+                credit_card=credit_card,
+                lancamento=lancamento,
+        ):
+            raise ValueError(
+                "Para apagar parcelas adiantadas, primeiro é necessário "
+                "reajustar as parcelas extras dessa fatura para seu mês original."
+            )
+
+        if modo == "unico":
+            self.expense_repository.cancelar_lancamento(
+                expense_id=expense_id
+            )
+            return
+
+        if modo == "parcelamento_inteiro":
+            self.expense_repository.cancelar_parcelamento_inteiro(
+                installment_group_id=installment_group_id
+            )
+            return
+
+        if modo == "deste_em_diante":
+            self.expense_repository.cancelar_parcelas_a_partir_de(
+                installment_group_id=installment_group_id,
+                installment_number=int(
+                    lancamento["installment_number"]
+                ),
+                invoice_year=reference_invoice_year,
+                invoice_month=reference_invoice_month,
+            )
+            return
+
+    def _parcela_esta_adiantada(
+            self,
+            credit_card: dict,
+            lancamento: dict,
+    ) -> bool:
+        installment_group_id = lancamento.get(
+            "installment_group_id"
+        )
+
+        if not installment_group_id:
+            return False
+
+        parcelas = self.expense_repository.listar_parcelas_grupo(
+            installment_group_id=installment_group_id
+        )
+
+        parcelas_reais = [
+            parcela
+            for parcela in parcelas
+            if parcela["source_type"] != "projected_installment"
+        ]
+
+        if not parcelas_reais:
+            return False
+
+        parcela_base = min(
+            parcelas_reais,
+            key=lambda parcela: int(
+                parcela["installment_number"]
+            ),
+        )
+
+        numero_base = int(
+            parcela_base["installment_number"]
+        )
+
+        data_base = date.fromisoformat(
+            parcela_base["effective_purchase_date"]
+        )
+
+        data_primeira_parcela = self._somar_meses(
+            data_base,
+            -(numero_base - 1),
+        )
+
+        numero_parcela = int(
+            lancamento["installment_number"]
+        )
+
+        data_esperada = self._somar_meses(
+            data_primeira_parcela,
+            numero_parcela - 1,
+        )
+
+        expected_year, expected_month = (
+            self.invoice_service.calcular_mes_fatura(
+                purchase_date=data_esperada,
+                closing_day=credit_card["closing_day"],
+            )
+        )
+
+        competencia_atual = None
+
+        for parcela in parcelas:
+            if parcela["id"] == lancamento["id"]:
+                competencia_atual = (
+                    int(parcela["invoice_year"]),
+                    int(parcela["invoice_month"]),
+                )
+                break
+
+        if competencia_atual is None:
+            return False
+
+        competencia_esperada = (
+            expected_year,
+            expected_month,
+        )
+
+        return competencia_atual < competencia_esperada
+
     def _somar_meses_competencia(
             self,
             year: int,

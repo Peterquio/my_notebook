@@ -1,4 +1,4 @@
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 from ui.widgets.date_line_edit import DateLineEdit
 
 class CreditCardExpenseDialog(QDialog):
+    delete_requested = Signal()
+
     def __init__(
             self,
             categories: list[dict],
@@ -115,6 +117,16 @@ class CreditCardExpenseDialog(QDialog):
         layout.addWidget(ajuda)
 
         botoes = QHBoxLayout()
+
+        if self.mode == "edit":
+            excluir = QPushButton("Excluir")
+            excluir.setObjectName("DangerButton")
+            excluir.clicked.connect(
+                self._solicitar_exclusao
+            )
+
+            botoes.addWidget(excluir)
+
         botoes.addStretch()
 
         cancelar = QPushButton("Cancelar")
@@ -220,6 +232,10 @@ class CreditCardExpenseDialog(QDialog):
 
         super().keyPressEvent(event)
 
+    def _solicitar_exclusao(self) -> None:
+        self.delete_requested.emit()
+        self.reject()
+
     def _aplicar_estilo(self) -> None:
         self.setStyleSheet("""
             QDialog {
@@ -279,5 +295,14 @@ class CreditCardExpenseDialog(QDialog):
 
             QPushButton:default:hover {
                 background-color: #1d4ed8;
+            }
+            
+            QPushButton#DangerButton {
+                background-color: #fee2e2;
+                color: #b91c1c;
+            }
+
+            QPushButton#DangerButton:hover {
+                background-color: #fecaca;
             }
         """)
