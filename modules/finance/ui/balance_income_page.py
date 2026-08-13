@@ -1,6 +1,8 @@
-from PySide6.QtCore import Qt
+from datetime import date
+
+from dateutil.relativedelta import relativedelta
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -10,6 +12,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QVBoxLayout,
     QWidget,
+    QCalendarWidget,
+    QDialog,
 )
 
 from modules.finance.services.balance_service import BalanceService
@@ -17,6 +21,9 @@ from modules.finance.services.balance_account_service import BalanceAccountServi
 from modules.finance.ui.dialogs.balance_income_dialog import BalanceIncomeDialog
 from modules.finance.ui.dialogs.balance_receive_income_dialog import (
     BalanceReceiveIncomeDialog,
+)
+from modules.finance.repositories.finance_settings_repository import (
+    FinanceSettingsRepository,
 )
 
 
@@ -33,9 +40,14 @@ class BalanceIncomePage(QWidget):
         self.balance_service = BalanceService(self.username)
         self.account_service = BalanceAccountService(self.username)
 
-        self.cycles = []
+        self.settings_repository = FinanceSettingsRepository(
+            self.username
+        )
+
         self.accounts = []
-        self.selected_cycle_id = None
+
+        self.start_date_iso = None
+        self.end_date_iso = None
 
         self._montar_interface()
         self._carregar_dados_base()
@@ -52,10 +64,19 @@ class BalanceIncomePage(QWidget):
             "font-size: 22px; font-weight: bold; color: #0f172a;"
         )
 
-        self.cycle_combo = QComboBox()
-        self.cycle_combo.setFixedWidth(260)
-        self.cycle_combo.currentIndexChanged.connect(
-            self._alterar_ciclo
+        self.periodo_label = QLabel()
+        self.periodo_label.setStyleSheet(
+            "font-size: 12px; color: #475569;"
+        )
+
+        periodo_inicio = QPushButton("Início")
+        periodo_inicio.clicked.connect(
+            lambda: self._abrir_calendario_periodo("inicio")
+        )
+
+        periodo_fim = QPushButton("Fim")
+        periodo_fim.clicked.connect(
+            lambda: self._abrir_calendario_periodo("fim")
         )
 
         nova = QPushButton("+ Nova Receita")
@@ -75,8 +96,9 @@ class BalanceIncomePage(QWidget):
 
         header.addWidget(titulo)
         header.addStretch()
-        header.addWidget(QLabel("Ciclo"))
-        header.addWidget(self.cycle_combo)
+        header.addWidget(self.periodo_label)
+        header.addWidget(periodo_inicio)
+        header.addWidget(periodo_fim)
         header.addWidget(nova)
         header.addWidget(editar)
         header.addWidget(excluir)
@@ -118,46 +140,28 @@ class BalanceIncomePage(QWidget):
 
     def _carregar_dados_base(self) -> None:
         self.accounts = self.account_service.listar_contas()
-        self.cycles = self.balance_service.listar_ciclos()
 
-        self.cycle_combo.blockSignals(True)
-        self.cycle_combo.clear()
+        inicio, fim = self._obter_periodo_padrao()
 
-        if not self.cycles:
-            self.cycle_combo.addItem("Nenhum ciclo encontrado", None)
-            self.selected_cycle_id = None
-            self.cycle_combo.blockSignals(False)
-            self._carregar_receitas()
-            return
+        self.start_date_iso = inicio
+        self.end_date_iso = fim
 
-        for ciclo in self.cycles:
-            texto = (
-                f"{self._formatar_data(ciclo['start_date'])}"
-                f" → "
-                f"{self._formatar_data(ciclo['end_date'])}"
-            )
-
-            self.cycle_combo.addItem(
-                texto,
-                ciclo["id"],
-            )
-
-        self.selected_cycle_id = self.cycle_combo.currentData()
-        self.cycle_combo.blockSignals(False)
-
-        self._carregar_receitas()
-
-    def _alterar_ciclo(self) -> None:
-        self.selected_cycle_id = self.cycle_combo.currentData()
         self._carregar_receitas()
 
     def _carregar_receitas(self) -> None:
-        if self.selected_cycle_id is None:
+        if not self.start_date_iso or not self.end_date_iso:
             self.table.setRowCount(0)
             return
 
-        receitas = self.balance_service.listar_receitas_ciclo(
-            self.selected_cycle_id
+        self.periodo_label.setText(
+            f"{self._formatar_data(self.start_date_iso)}"
+            f" → "
+            f"{self._formatar_data(self.end_date_iso)}"
+        )
+
+        receitas = self.balance_service.repository.listar_receitas_periodo(
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
         )
 
         account_by_id = {
@@ -232,14 +236,6 @@ class BalanceIncomePage(QWidget):
         return item.data(Qt.UserRole)
 
     def _abrir_dialog_nova_receita(self) -> None:
-        if self.selected_cycle_id is None:
-            QMessageBox.warning(
-                self,
-                "Ciclo obrigatório",
-                "Crie ou selecione um ciclo antes de cadastrar receitas.",
-            )
-            return
-
         if not self.accounts:
             QMessageBox.warning(
                 self,
@@ -259,7 +255,6 @@ class BalanceIncomePage(QWidget):
         dados = dialog.obter_dados()
 
         self.balance_service.criar_receita(
-            cycle_id=self.selected_cycle_id,
             **dados,
         )
 
@@ -295,13 +290,8 @@ class BalanceIncomePage(QWidget):
 
         dados = dialog.obter_dados()
 
-        dados.pop(
-            "opening_balance_cents",
-            None,
-        )
-
-        self.account_service.atualizar_conta(
-            account_id=conta["id"],
+        self.balance_service.atualizar_receita(
+            receita_id=receita["id"],
             **dados,
         )
 
@@ -424,3 +414,105 @@ class BalanceIncomePage(QWidget):
     ) -> str:
         ano, mes, dia = data_iso.split("-")
         return f"{dia}/{mes}/{ano}"
+
+    def _abrir_calendario_periodo(
+            self,
+            campo: str,
+    ) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            "Selecionar data inicial"
+            if campo == "inicio"
+            else "Selecionar data final"
+        )
+        dialog.setModal(True)
+        dialog.setMinimumWidth(320)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        calendario = QCalendarWidget()
+        calendario.setGridVisible(True)
+
+        data_atual = (
+            self.start_date_iso
+            if campo == "inicio"
+            else self.end_date_iso
+        )
+
+        if data_atual is not None:
+            calendario.setSelectedDate(
+                QDate.fromString(
+                    data_atual,
+                    "yyyy-MM-dd",
+                )
+            )
+
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+
+        cancelar = QPushButton("Cancelar")
+        cancelar.clicked.connect(dialog.reject)
+
+        aplicar = QPushButton("Aplicar")
+        aplicar.clicked.connect(dialog.accept)
+
+        botoes.addWidget(cancelar)
+        botoes.addWidget(aplicar)
+
+        layout.addWidget(calendario)
+        layout.addLayout(botoes)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        nova_data = calendario.selectedDate().toPython().isoformat()
+
+        if campo == "inicio":
+            self.start_date_iso = nova_data
+        else:
+            self.end_date_iso = nova_data
+
+        self._carregar_receitas()
+
+    def _obter_periodo_padrao(self) -> tuple[str, str]:
+        reference_day = (
+            self.settings_repository.obter_reference_day()
+        )
+
+        hoje = date.today()
+
+        if hoje.day >= reference_day:
+            inicio = hoje.replace(
+                day=reference_day
+            )
+        else:
+            inicio = (
+                    hoje.replace(day=1)
+                    + relativedelta(months=-1)
+            )
+
+            ultimo_dia = (
+                    inicio
+                    + relativedelta(day=31)
+            ).day
+
+            inicio = inicio.replace(
+                day=min(
+                    reference_day,
+                    ultimo_dia,
+                )
+            )
+
+        fim = (
+                inicio
+                + relativedelta(months=1)
+                + relativedelta(days=-1)
+        )
+
+        return (
+            inicio.isoformat(),
+            fim.isoformat(),
+        )
+

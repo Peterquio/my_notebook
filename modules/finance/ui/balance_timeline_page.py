@@ -35,9 +35,7 @@ class BalanceTimelinePage(QWidget):
             FinanceSettingsRepository(username)
         )
 
-        self.cycles = []
         self.accounts = []
-        self.selected_cycle_id = None
 
         self.start_date_iso = None
         self.end_date_iso = None

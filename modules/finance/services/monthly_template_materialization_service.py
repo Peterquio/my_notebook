@@ -70,20 +70,9 @@ class MonthlyTemplateMaterializationService:
                 mes=mes,
             )
 
-            ciclo = self._obter_ou_criar_ciclo_para_data(
-                data_ocorrencia
-            )
-
-            cycle_id = (
-                ciclo["id"]
-                if ciclo is not None
-                else None
-            )
-
             if template["template_type"] == "income":
                 criado = self._materializar_receita(
                     template=template,
-                    cycle_id=cycle_id,
                     data_ocorrencia=data_ocorrencia,
                     external_reference=external_reference,
                 )
@@ -98,7 +87,6 @@ class MonthlyTemplateMaterializationService:
             if template["template_type"] == "commitment":
                 criado = self._materializar_compromisso(
                     template=template,
-                    cycle_id=cycle_id,
                     data_ocorrencia=data_ocorrencia,
                     external_reference=external_reference,
                 )
@@ -124,7 +112,6 @@ class MonthlyTemplateMaterializationService:
     def _materializar_receita(
             self,
             template: dict,
-            cycle_id: int,
             data_ocorrencia: date,
             external_reference: str,
     ) -> bool:
@@ -138,7 +125,6 @@ class MonthlyTemplateMaterializationService:
             return False
 
         self.balance_repository.criar_receita(
-            cycle_id=cycle_id,
             account_id=template["account_id"],
             description=template["description"],
             expected_amount_cents=template["estimated_amount_cents"],
@@ -153,7 +139,6 @@ class MonthlyTemplateMaterializationService:
     def _materializar_compromisso(
             self,
             template: dict,
-            cycle_id: int,
             data_ocorrencia: date,
             external_reference: str,
     ) -> bool:
@@ -167,7 +152,6 @@ class MonthlyTemplateMaterializationService:
             return False
 
         self.balance_repository.criar_compromisso(
-            cycle_id=cycle_id,
             description=template["description"],
             expected_amount_cents=template["estimated_amount_cents"],
             due_date=data_ocorrencia.isoformat(),
@@ -181,123 +165,6 @@ class MonthlyTemplateMaterializationService:
         )
 
         return True
-
-    def _obter_ou_criar_ciclo_para_data(
-            self,
-            data_ocorrencia: date,
-    ) -> dict | None:
-        ciclos = self.balance_repository.listar_ciclos_ativos()
-
-        for ciclo in ciclos:
-            data_inicio = date.fromisoformat(
-                ciclo["start_date"]
-            )
-
-            data_fim = date.fromisoformat(
-                ciclo["end_date"]
-            )
-
-            if data_inicio <= data_ocorrencia <= data_fim:
-                return ciclo
-
-        if not ciclos:
-            raise ValueError(
-                "Nenhum ciclo financeiro foi criado ainda. "
-                "Crie o primeiro ciclo antes de materializar templates."
-            )
-
-        ciclos_ordenados = sorted(
-            ciclos,
-            key=lambda item: item["start_date"],
-        )
-
-        ultimo_ciclo = ciclos_ordenados[-1]
-
-        while data_ocorrencia > date.fromisoformat(ultimo_ciclo["end_date"]):
-            ultimo_ciclo = self._criar_proximo_ciclo(
-                ultimo_ciclo
-            )
-
-        if date.fromisoformat(ultimo_ciclo["start_date"]) <= data_ocorrencia <= date.fromisoformat(ultimo_ciclo["end_date"]):
-            return ultimo_ciclo
-
-        return None
-
-    def _criar_proximo_ciclo(
-            self,
-            ciclo_base: dict,
-    ) -> dict:
-        data_fim_atual = date.fromisoformat(
-            ciclo_base["end_date"]
-        )
-
-        nova_data_inicio = date.fromordinal(
-            data_fim_atual.toordinal() + 1
-        )
-
-        nova_data_fim = self._calcular_fim_ciclo(
-            nova_data_inicio
-        )
-
-        novo_cycle_id = self.balance_repository.criar_ciclo(
-            name=(
-                f"Ciclo {nova_data_inicio.isoformat()} "
-                f"até {nova_data_fim.isoformat()}"
-            ),
-            start_date=nova_data_inicio.isoformat(),
-            end_date=nova_data_fim.isoformat(),
-            opening_balance_source="auto",
-        )
-
-        novo_ciclo = self.balance_repository.buscar_ciclo_por_id(
-            novo_cycle_id
-        )
-
-        if novo_ciclo is None:
-            raise ValueError(
-                "O ciclo foi criado, mas não pôde ser carregado."
-            )
-
-        return novo_ciclo
-
-    def _calcular_fim_ciclo(
-            self,
-            data_inicio: date,
-    ) -> date:
-        if data_inicio.day == 1:
-            ultimo_dia = calendar.monthrange(
-                data_inicio.year,
-                data_inicio.month,
-            )[1]
-
-            return date(
-                data_inicio.year,
-                data_inicio.month,
-                ultimo_dia,
-            )
-
-        proximo_mes_ano = data_inicio.year
-        proximo_mes = data_inicio.month + 1
-
-        if proximo_mes > 12:
-            proximo_mes = 1
-            proximo_mes_ano += 1
-
-        ultimo_dia_proximo_mes = calendar.monthrange(
-            proximo_mes_ano,
-            proximo_mes,
-        )[1]
-
-        dia_fim = min(
-            data_inicio.day - 1,
-            ultimo_dia_proximo_mes,
-        )
-
-        return date(
-            proximo_mes_ano,
-            proximo_mes,
-            dia_fim,
-        )
 
     def _calcular_data_ocorrencia(
             self,

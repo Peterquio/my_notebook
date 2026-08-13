@@ -1,6 +1,6 @@
+from datetime import date
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -38,9 +38,6 @@ class BalanceAccountsPage(QWidget):
         self.account_service = BalanceAccountService(self.username)
         self.balance_service = BalanceService(self.username)
 
-        self.cycles = []
-        self.selected_cycle_id = None
-
         self._montar_interface()
         self._carregar_dados_base()
 
@@ -54,12 +51,6 @@ class BalanceAccountsPage(QWidget):
         titulo = QLabel("Contas Financeiras")
         titulo.setStyleSheet(
             "font-size: 22px; font-weight: bold; color: #0f172a;"
-        )
-
-        self.cycle_combo = QComboBox()
-        self.cycle_combo.setFixedWidth(260)
-        self.cycle_combo.currentIndexChanged.connect(
-            self._alterar_ciclo
         )
 
         nova_conta = QPushButton("+ Nova conta")
@@ -79,8 +70,6 @@ class BalanceAccountsPage(QWidget):
 
         header.addWidget(titulo)
         header.addStretch()
-        header.addWidget(QLabel("Ciclo"))
-        header.addWidget(self.cycle_combo)
         header.addWidget(nova_conta)
         header.addWidget(editar)
         header.addWidget(desativar)
@@ -96,7 +85,7 @@ class BalanceAccountsPage(QWidget):
                 "AGÊNCIA",
                 "Nº CONTA",
                 "TIPO",
-                "SALDO INICIAL",
+                "SALDO ATUAL",
                 "GLOBAL",
             ]
         )
@@ -125,37 +114,6 @@ class BalanceAccountsPage(QWidget):
         layout.addWidget(self.table, 1)
 
     def _carregar_dados_base(self) -> None:
-        self.cycles = self.balance_service.listar_ciclos()
-
-        self.cycle_combo.blockSignals(True)
-        self.cycle_combo.clear()
-
-        if not self.cycles:
-            self.cycle_combo.addItem("Nenhum ciclo encontrado", None)
-            self.selected_cycle_id = None
-            self.cycle_combo.blockSignals(False)
-            self._carregar_contas()
-            return
-
-        for ciclo in self.cycles:
-            texto = (
-                f"{self._formatar_data(ciclo['start_date'])}"
-                f" → "
-                f"{self._formatar_data(ciclo['end_date'])}"
-            )
-
-            self.cycle_combo.addItem(
-                texto,
-                ciclo["id"],
-            )
-
-        self.selected_cycle_id = self.cycle_combo.currentData()
-        self.cycle_combo.blockSignals(False)
-
-        self._carregar_contas()
-
-    def _alterar_ciclo(self) -> None:
-        self.selected_cycle_id = self.cycle_combo.currentData()
         self._carregar_contas()
 
     def _carregar_contas(self) -> None:
@@ -183,10 +141,10 @@ class BalanceAccountsPage(QWidget):
             conta["account_type"],
         )
 
-        saldo_inicial = self.account_service.buscar_saldo_inicial_conta(
-            cycle_id=self.selected_cycle_id,
+        saldo_atual = self.balance_service.calcular_saldo_conta_na_data(
             account_id=conta["id"],
-        ) if self.selected_cycle_id is not None else 0
+            data_iso=date.today().isoformat(),
+        )
 
         valores = [
             conta["name"],
@@ -194,7 +152,7 @@ class BalanceAccountsPage(QWidget):
             conta.get("agency") or "-",
             conta.get("account_number") or "-",
             tipo_nome,
-            self._formatar_moeda(saldo_inicial),
+            self._formatar_moeda(saldo_atual),
             "Sim" if conta["include_in_global_balance"] else "Não",
         ]
 
@@ -235,41 +193,12 @@ class BalanceAccountsPage(QWidget):
 
         dados = dialog.obter_dados()
 
-        account_id = self.account_service.criar_conta(
+        self.account_service.criar_conta(
             **dados
         )
 
-        opening_balance_cents = dados.get(
-            "opening_balance_cents",
-            0,
-        )
-
-        self._definir_saldo_inicial_conta(
-            account_id=account_id,
-            opening_balance_cents=opening_balance_cents,
-        )
         self._carregar_contas()
         self.data_changed.emit()
-
-    def _definir_saldo_inicial_conta(
-            self,
-            account_id: int,
-            opening_balance_cents: int,
-    ) -> None:
-
-        if not self.cycles:
-            return
-
-        primeiro_ciclo = sorted(
-            self.cycles,
-            key=lambda ciclo: ciclo["start_date"],
-        )[0]
-
-        self.account_service.definir_saldo_inicial_conta(
-            cycle_id=primeiro_ciclo["id"],
-            account_id=account_id,
-            opening_balance_cents=opening_balance_cents,
-        )
 
     def _editar_conta_selecionada(self) -> None:
         conta = self._obter_conta_selecionada()
@@ -282,16 +211,7 @@ class BalanceAccountsPage(QWidget):
             )
             return
 
-        saldo_inicial_cents = 0
-
-        if self.selected_cycle_id is not None:
-            saldo_inicial_cents = self.account_service.buscar_saldo_inicial_conta(
-                cycle_id=self.selected_cycle_id,
-                account_id=conta["id"],
-            )
-
         conta_para_edicao = dict(conta)
-        conta_para_edicao["opening_balance_cents"] = saldo_inicial_cents
 
         dialog = BankAccountSetupDialog(
             account_data=conta_para_edicao,
@@ -312,12 +232,6 @@ class BalanceAccountsPage(QWidget):
             account_id=conta["id"],
             **dados,
         )
-
-        if opening_balance_cents is not None:
-            self._definir_saldo_inicial_conta(
-                account_id=conta["id"],
-                opening_balance_cents=opening_balance_cents,
-            )
 
         self._carregar_contas()
         self.data_changed.emit()
@@ -349,13 +263,6 @@ class BalanceAccountsPage(QWidget):
 
         self._carregar_contas()
         self.data_changed.emit()
-
-    def _formatar_data(
-            self,
-            data_iso: str,
-    ) -> str:
-        ano, mes, dia = data_iso.split("-")
-        return f"{dia}/{mes}/{ano}"
 
     def _formatar_moeda(
             self,

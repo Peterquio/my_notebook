@@ -155,66 +155,6 @@ class BalanceAccountRepository:
 
         return dict(row)
 
-    def definir_saldo_inicial_conta(
-            self,
-            cycle_id: int,
-            account_id: int,
-            opening_balance_cents: int,
-    ) -> None:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO finance_balance_cycle_account_openings (
-                cycle_id,
-                account_id,
-                opening_balance_cents
-            )
-            VALUES (?, ?, ?)
-            ON CONFLICT(cycle_id, account_id)
-            DO UPDATE SET
-                opening_balance_cents = excluded.opening_balance_cents,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                cycle_id,
-                account_id,
-                opening_balance_cents,
-            ),
-        )
-
-        self.conexao.commit()
-
-    def listar_saldos_iniciais_ciclo(
-            self,
-            cycle_id: int,
-    ) -> list[dict]:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                o.id,
-                o.cycle_id,
-                o.account_id,
-                o.opening_balance_cents,
-
-                a.name AS account_name,
-                a.account_type,
-                a.include_in_global_balance,
-                a.is_investment
-            FROM finance_balance_cycle_account_openings o
-            INNER JOIN finance_balance_accounts a
-                ON a.id = o.account_id
-            WHERE o.cycle_id = ?
-              AND a.is_active = 1
-            ORDER BY a.name
-            """,
-            (cycle_id,),
-        )
-
-        return [dict(row) for row in cursor.fetchall()]
-
     def atualizar_conta(
             self,
             account_id: int,

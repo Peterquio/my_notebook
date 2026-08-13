@@ -90,7 +90,6 @@ class PixBalanceSyncService:
 
             receita_id = (
                 self.repository.criar_receita(
-                    cycle_id=None,
                     account_id=pix["account_id"],
                     description=descricao,
                     expected_amount_cents=pix["amount_cents"],
@@ -163,7 +162,6 @@ class PixBalanceSyncService:
         if compromisso is None:
 
             self.repository.criar_compromisso(
-                cycle_id=None,
                 account_id=pix["account_id"],
                 description=descricao,
                 expected_amount_cents=pix["amount_cents"],
@@ -184,7 +182,6 @@ class PixBalanceSyncService:
 
         self.repository.atualizar_compromisso(
             compromisso_id=compromisso["id"],
-            cycle_id=None,
             account_id=pix["account_id"],
             description=descricao,
             expected_amount_cents=pix["amount_cents"],

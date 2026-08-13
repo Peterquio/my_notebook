@@ -285,7 +285,6 @@ class BalanceCommitmentPage(QWidget):
         dados = dialog.obter_dados()
 
         self.balance_service.criar_compromisso(
-            cycle_id=None,
             **dados,
         )
 
@@ -331,7 +330,6 @@ class BalanceCommitmentPage(QWidget):
 
         self.balance_service.atualizar_compromisso(
             compromisso_id=compromisso["id"],
-            cycle_id=compromisso.get("cycle_id"),
             **dados,
         )
 

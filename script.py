@@ -4,139 +4,328 @@ from core.database.database_manager import DatabaseManager
 USERNAME = "default"
 
 
-def apagar_ciclos_legados(
-        username: str = USERNAME,
-) -> None:
-
-    database = DatabaseManager(
-        username
-    )
-
+def migrar() -> None:
+    database = DatabaseManager(USERNAME)
     conexao = database.get_connection()
+    cursor = conexao.cursor()
+
+    print("=" * 70)
+    print("MIGRATION - REMOÇÃO DOS CICLOS FINANCEIROS")
+    print("=" * 70)
+
+    cursor.execute("PRAGMA foreign_keys = OFF")
 
     try:
-        conexao.execute(
-            "BEGIN"
-        )
+        conexao.execute("BEGIN")
 
-        # -------------------------------------------------
-        # 1. Remove os saldos de abertura ligados a ciclos
-        # -------------------------------------------------
+        # =====================================================
+        # PRESERVA SEQUÊNCIAS AUTOINCREMENT
+        # =====================================================
 
-        cursor = conexao.execute(
+        cursor.execute(
             """
-            DELETE FROM finance_balance_cycle_account_openings
-            """
-        )
-
-        print(
-            "Aberturas de ciclo removidas:",
-            cursor.rowcount,
-        )
-
-        # -------------------------------------------------
-        # 2. Remove os ciclos
-        # -------------------------------------------------
-
-        cursor = conexao.execute(
-            """
-            DELETE FROM finance_balance_cycles
+            SELECT seq
+            FROM sqlite_sequence
+            WHERE name = 'finance_balance_income_entries'
             """
         )
+        row = cursor.fetchone()
+        income_sequence = row["seq"] if row else None
 
-        print(
-            "Ciclos removidos:",
-            cursor.rowcount,
-        )
-
-        # -------------------------------------------------
-        # 3. Validação
-        # -------------------------------------------------
-
-        cursor = conexao.execute(
+        cursor.execute(
             """
-            SELECT COUNT(*) AS total
-            FROM finance_balance_cycles
+            SELECT seq
+            FROM sqlite_sequence
+            WHERE name = 'finance_balance_commitments'
+            """
+        )
+        row = cursor.fetchone()
+        commitment_sequence = row["seq"] if row else None
+
+        # =====================================================
+        # RECEITAS
+        # =====================================================
+
+        print("Migrando finance_balance_income_entries...")
+
+        cursor.execute(
+            """
+            ALTER TABLE finance_balance_income_entries
+            RENAME TO finance_balance_income_entries_old
             """
         )
 
-        total_ciclos = cursor.fetchone()["total"]
-
-        cursor = conexao.execute(
+        cursor.execute(
             """
-            SELECT COUNT(*) AS total
-            FROM finance_balance_cycle_account_openings
-            """
-        )
+            CREATE TABLE finance_balance_income_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        total_aberturas = cursor.fetchone()["total"]
+                account_id INTEGER,
+                category_id INTEGER,
+                external_reference TEXT,
+                description TEXT NOT NULL,
 
-        cursor = conexao.execute(
-            """
-            SELECT COUNT(*) AS total
-            FROM finance_balance_income_entries
-            WHERE cycle_id IS NOT NULL
-            """
-        )
+                expected_amount_cents INTEGER NOT NULL DEFAULT 0,
+                actual_amount_cents INTEGER,
 
-        receitas_com_ciclo = cursor.fetchone()["total"]
+                expected_date TEXT NOT NULL,
+                received_date TEXT,
 
-        cursor = conexao.execute(
-            """
-            SELECT COUNT(*) AS total
-            FROM finance_balance_commitments
-            WHERE cycle_id IS NOT NULL
-            """
-        )
+                status TEXT NOT NULL DEFAULT 'expected',
 
-        compromissos_com_ciclo = cursor.fetchone()["total"]
+                commitment_origin TEXT NOT NULL DEFAULT 'manual',
+                projection_type TEXT NOT NULL DEFAULT 'real',
 
-        print()
-        print("Validação:")
-        print(
-            f"finance_balance_cycles: {total_ciclos}"
-        )
-        print(
-            "finance_balance_cycle_account_openings: "
-            f"{total_aberturas}"
-        )
-        print(
-            "Receitas com cycle_id: "
-            f"{receitas_com_ciclo}"
-        )
-        print(
-            "Compromissos com cycle_id: "
-            f"{compromissos_com_ciclo}"
-        )
+                is_recurring INTEGER NOT NULL DEFAULT 0,
+                notes TEXT,
 
-        if (
-                total_ciclos != 0
-                or total_aberturas != 0
-                or receitas_com_ciclo != 0
-                or compromissos_com_ciclo != 0
-        ):
-            raise RuntimeError(
-                "A limpeza de ciclos não ficou consistente."
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (account_id)
+                    REFERENCES finance_balance_accounts(id),
+
+                FOREIGN KEY (category_id)
+                    REFERENCES finance_categories(id)
             )
+            """
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO finance_balance_income_entries (
+                id,
+                account_id,
+                category_id,
+                external_reference,
+                description,
+                expected_amount_cents,
+                actual_amount_cents,
+                expected_date,
+                received_date,
+                status,
+                commitment_origin,
+                projection_type,
+                is_recurring,
+                notes,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                account_id,
+                category_id,
+                external_reference,
+                description,
+                expected_amount_cents,
+                actual_amount_cents,
+                expected_date,
+                received_date,
+                status,
+                commitment_origin,
+                projection_type,
+                is_recurring,
+                notes,
+                created_at,
+                updated_at
+            FROM finance_balance_income_entries_old
+            """
+        )
+
+        cursor.execute(
+            """
+            DROP TABLE finance_balance_income_entries_old
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_finance_balance_income_entries_category_id
+            ON finance_balance_income_entries(category_id)
+            """
+        )
+
+        # =====================================================
+        # COMPROMISSOS
+        # =====================================================
+
+        print("Migrando finance_balance_commitments...")
+
+        cursor.execute(
+            """
+            ALTER TABLE finance_balance_commitments
+            RENAME TO finance_balance_commitments_old
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE finance_balance_commitments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                description TEXT NOT NULL,
+
+                expected_amount_cents INTEGER NOT NULL DEFAULT 0,
+                actual_amount_cents INTEGER,
+
+                due_date TEXT NOT NULL,
+                paid_date TEXT,
+
+                payment_type TEXT NOT NULL DEFAULT 'bank_account',
+
+                account_id INTEGER,
+                credit_card_id INTEGER,
+                category_id INTEGER,
+
+                external_reference TEXT,
+
+                status TEXT NOT NULL DEFAULT 'expected',
+
+                commitment_origin TEXT NOT NULL DEFAULT 'manual',
+                projection_type TEXT NOT NULL DEFAULT 'real',
+
+                is_recurring INTEGER NOT NULL DEFAULT 0,
+                notes TEXT,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (account_id)
+                    REFERENCES finance_balance_accounts(id),
+
+                FOREIGN KEY (credit_card_id)
+                    REFERENCES finance_credit_cards(id),
+
+                FOREIGN KEY (category_id)
+                    REFERENCES finance_categories(id)
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO finance_balance_commitments (
+                id,
+                description,
+                expected_amount_cents,
+                actual_amount_cents,
+                due_date,
+                paid_date,
+                payment_type,
+                account_id,
+                credit_card_id,
+                category_id,
+                external_reference,
+                status,
+                commitment_origin,
+                projection_type,
+                is_recurring,
+                notes,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                description,
+                expected_amount_cents,
+                actual_amount_cents,
+                due_date,
+                paid_date,
+                payment_type,
+                account_id,
+                credit_card_id,
+                category_id,
+                external_reference,
+                status,
+                commitment_origin,
+                projection_type,
+                is_recurring,
+                notes,
+                created_at,
+                updated_at
+            FROM finance_balance_commitments_old
+            """
+        )
+
+        cursor.execute(
+            """
+            DROP TABLE finance_balance_commitments_old
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_finance_balance_commitments_category_id
+            ON finance_balance_commitments(category_id)
+            """
+        )
+
+        # =====================================================
+        # RESTAURA SEQUÊNCIAS
+        # =====================================================
+
+        if income_sequence is not None:
+            cursor.execute(
+                """
+                UPDATE sqlite_sequence
+                SET seq = ?
+                WHERE name = 'finance_balance_income_entries'
+                """,
+                (income_sequence,),
+            )
+
+        if commitment_sequence is not None:
+            cursor.execute(
+                """
+                UPDATE sqlite_sequence
+                SET seq = ?
+                WHERE name = 'finance_balance_commitments'
+                """,
+                (commitment_sequence,),
+            )
+
+        # =====================================================
+        # EXTERMINA CICLOS
+        # =====================================================
+
+        print("Removendo finance_balance_cycle_account_openings...")
+
+        cursor.execute(
+            """
+            DROP TABLE IF EXISTS finance_balance_cycle_account_openings
+            """
+        )
+
+        print("Removendo finance_balance_cycles...")
+
+        cursor.execute(
+            """
+            DROP TABLE IF EXISTS finance_balance_cycles
+            """
+        )
 
         conexao.commit()
 
         print()
-        print(
-            "Ciclos legados removidos com sucesso."
-        )
+        print("=" * 70)
+        print("CICLOCÍDIO DO BANCO CONCLUÍDO COM SUCESSO 👹")
+        print("=" * 70)
 
     except Exception:
         conexao.rollback()
 
         print()
-        print(
-            "Erro encontrado. "
-            "Nenhuma alteração foi mantida."
-        )
+        print("=" * 70)
+        print("ERRO NA MIGRATION - ALTERAÇÕES REVERTIDAS")
+        print("=" * 70)
 
         raise
 
+    finally:
+        cursor.execute("PRAGMA foreign_keys = ON")
+
 
 if __name__ == "__main__":
-    apagar_ciclos_legados()
+    migrar()

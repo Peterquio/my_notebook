@@ -7,8 +7,6 @@ from modules.finance.repositories.credit_card_invoice_repository import (
     CreditCardInvoiceRepository,
 )
 
-from modules.finance.services.balance_service import BalanceService
-
 from modules.finance.services.credit_card_detail_service import (
     CreditCardDetailService,
 )
@@ -27,10 +25,6 @@ class CreditCardBalanceSyncService:
         self.username = username
 
         self.balance_repository = BalanceRepository(
-            username
-        )
-
-        self.balance_service = BalanceService(
             username
         )
 
@@ -96,8 +90,6 @@ class CreditCardBalanceSyncService:
             due_day=credit_card["due_day"],
         )
 
-        cycle_id = None
-
         compromisso_ids = []
 
         external_reference_open = (
@@ -129,7 +121,6 @@ class CreditCardBalanceSyncService:
             compromisso_id = (
                 self.balance_repository.upsert_compromisso_por_external_reference(
                     external_reference=external_reference_open,
-                    cycle_id=cycle_id,
                     description=description,
                     expected_amount_cents=valor_a_pagar_cents,
                     actual_amount_cents=None,
@@ -254,80 +245,6 @@ class CreditCardBalanceSyncService:
         for card in self.credit_card_repository.listar_cartoes_ativos():
             if card["id"] == credit_card_id:
                 return card
-
-        return None
-
-    def _obter_ciclo_por_data(
-            self,
-            data_iso: str,
-    ) -> dict | None:
-        return self._encontrar_ciclo_por_data(
-            data_iso
-        )
-
-    def _calcular_fim_proximo_ciclo(
-            self,
-            start_date: date,
-    ) -> date:
-        if start_date.day == 1:
-            return date(
-                start_date.year,
-                start_date.month,
-                self._ultimo_dia_mes(
-                    start_date.year,
-                    start_date.month,
-                ),
-            )
-
-        proximo_mes_year, proximo_mes_month = self._somar_meses_competencia(
-            year=start_date.year,
-            month=start_date.month,
-            deslocamento=1,
-        )
-
-        ultimo_dia_mes_destino = self._ultimo_dia_mes(
-            proximo_mes_year,
-            proximo_mes_month,
-        )
-
-        dia_fim = min(
-            start_date.day - 1,
-            ultimo_dia_mes_destino,
-        )
-
-        return date(
-            proximo_mes_year,
-            proximo_mes_month,
-            dia_fim,
-        )
-
-    def _montar_nome_ciclo(
-            self,
-            start_date: date,
-    ) -> str:
-        return f"Ciclo {start_date.month:02d}/{start_date.year}"
-
-
-    def _encontrar_ciclo_por_data(
-            self,
-            data_iso: str,
-    ) -> dict | None:
-        data_referencia = date.fromisoformat(
-            data_iso
-        )
-
-        ciclos = self.balance_repository.listar_ciclos_ativos()
-
-        for ciclo in ciclos:
-            start_date = date.fromisoformat(
-                ciclo["start_date"]
-            )
-            end_date = date.fromisoformat(
-                ciclo["end_date"]
-            )
-
-            if start_date <= data_referencia <= end_date:
-                return ciclo
 
         return None
 

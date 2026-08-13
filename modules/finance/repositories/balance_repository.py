@@ -6,65 +6,8 @@ class BalanceRepository:
         self.database = DatabaseManager(username)
         self.conexao = self.database.get_connection()
 
-    def criar_ciclo(
-            self,
-            name: str,
-            start_date: str,
-            end_date: str,
-            opening_balance_source: str = "manual",
-    ) -> int:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO finance_balance_cycles (
-                name,
-                start_date,
-                end_date,
-                opening_balance_source
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                name,
-                start_date,
-                end_date,
-                opening_balance_source,
-            ),
-        )
-
-        self.conexao.commit()
-
-        return cursor.lastrowid
-
-    def listar_ciclos_ativos(self) -> list[dict]:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                name,
-                start_date,
-                end_date,
-                opening_balance_source,
-                is_active,
-                created_at,
-                updated_at
-            FROM finance_balance_cycles
-            WHERE is_active = 1
-            ORDER BY start_date DESC
-            """
-        )
-
-        return [
-            dict(row)
-            for row in cursor.fetchall()
-        ]
-
     def criar_receita(
             self,
-            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             expected_date: str,
@@ -78,7 +21,6 @@ class BalanceRepository:
         cursor.execute(
             """
             INSERT INTO finance_balance_income_entries (
-                cycle_id,
                 account_id,
                 external_reference,
                 description,
@@ -88,10 +30,9 @@ class BalanceRepository:
                 is_recurring,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'expected', ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'expected', ?, ?)
             """,
             (
-                cycle_id,
                 account_id,
                 external_reference,
                 description,
@@ -105,40 +46,8 @@ class BalanceRepository:
         self.conexao.commit()
         return cursor.lastrowid
 
-    def listar_receitas_ciclo(
-            self,
-            cycle_id: int,
-    ) -> list[dict]:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                cycle_id,
-                account_id,
-                description,
-                expected_amount_cents,
-                actual_amount_cents,
-                expected_date,
-                received_date,
-                status,
-                is_recurring,
-                notes,
-                created_at,
-                updated_at
-            FROM finance_balance_income_entries
-            WHERE cycle_id = ?
-            ORDER BY expected_date ASC, id ASC
-            """,
-            (cycle_id,),
-        )
-
-        return [dict(row) for row in cursor.fetchall()]
-
     def criar_compromisso(
             self,
-            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             due_date: str,
@@ -159,7 +68,6 @@ class BalanceRepository:
         cursor.execute(
             """
             INSERT INTO finance_balance_commitments (
-                cycle_id,
                 description,
                 expected_amount_cents,
                 actual_amount_cents,
@@ -175,10 +83,9 @@ class BalanceRepository:
                 external_reference,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                cycle_id,
                 description,
                 expected_amount_cents,
                 actual_amount_cents,
@@ -198,42 +105,6 @@ class BalanceRepository:
 
         self.conexao.commit()
         return cursor.lastrowid
-
-    def listar_compromissos_ciclo(
-            self,
-            cycle_id: int,
-    ) -> list[dict]:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                cycle_id,
-                description,
-                expected_amount_cents,
-                actual_amount_cents,
-                due_date,
-                paid_date,
-                payment_type,
-                account_id,
-                credit_card_id,
-                external_reference,
-                status,
-                commitment_origin,
-                projection_type,
-                is_recurring,
-                notes,
-                created_at,
-                updated_at
-            FROM finance_balance_commitments
-            WHERE cycle_id = ?
-            ORDER BY due_date ASC, id ASC
-            """,
-            (cycle_id,),
-        )
-
-        return [dict(row) for row in cursor.fetchall()]
 
     def confirmar_receita(
             self,
@@ -335,36 +206,6 @@ class BalanceRepository:
 
         self.conexao.commit()
 
-    def buscar_ciclo_por_id(
-            self,
-            cycle_id: int,
-    ) -> dict | None:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                name,
-                start_date,
-                end_date,
-                opening_balance_source,
-                is_active,
-                created_at,
-                updated_at
-            FROM finance_balance_cycles
-            WHERE id = ?
-            """,
-            (cycle_id,),
-        )
-
-        row = cursor.fetchone()
-
-        if row is None:
-            return None
-
-        return dict(row)
-
     def atualizar_receita(
             self,
             receita_id: int,
@@ -422,7 +263,6 @@ class BalanceRepository:
     def atualizar_compromisso(
             self,
             compromisso_id: int,
-            cycle_id: int | None,
             description: str,
             expected_amount_cents: int,
             due_date: str,
@@ -445,7 +285,6 @@ class BalanceRepository:
             """
             UPDATE finance_balance_commitments
             SET
-                cycle_id = ?,
                 description = ?,
                 expected_amount_cents = ?,
                 actual_amount_cents = ?,
@@ -464,7 +303,6 @@ class BalanceRepository:
             WHERE id = ?
             """,
             (
-                cycle_id,
                 description,
                 expected_amount_cents,
                 actual_amount_cents,
@@ -521,76 +359,8 @@ class BalanceRepository:
 
         return [dict(row) for row in cursor.fetchall()]
 
-    def obter_resumo_ciclo(
-            self,
-            cycle_id: int,
-    ) -> dict:
-        receitas = self.listar_receitas_ciclo(
-            cycle_id
-        )
-
-        compromissos = self.listar_compromissos_ciclo(
-            cycle_id
-        )
-
-        receitas_recebidas_cents = 0
-        receitas_previstas_cents = 0
-
-        for receita in receitas:
-            if receita["status"] == "received":
-                receitas_recebidas_cents += (
-                        receita["actual_amount_cents"]
-                        or 0
-                )
-            else:
-                receitas_previstas_cents += (
-                        receita["expected_amount_cents"]
-                        or 0
-                )
-
-        compromissos_pagos_cents = 0
-        compromissos_previstos_cents = 0
-
-        for compromisso in compromissos:
-            if compromisso["status"] == "paid":
-                compromissos_pagos_cents += (
-                        compromisso["actual_amount_cents"]
-                        or 0
-                )
-            else:
-                compromissos_previstos_cents += (
-                        compromisso["expected_amount_cents"]
-                        or 0
-                )
-
-        saldo_inicial_cents = 0
-
-        saldo_atual_cents = (
-                saldo_inicial_cents
-                + receitas_recebidas_cents
-                - compromissos_pagos_cents
-        )
-
-        saldo_previsto_cents = (
-                saldo_atual_cents
-                + receitas_previstas_cents
-                - compromissos_previstos_cents
-        )
-
-        return {
-            "cycle_id": cycle_id,
-            "saldo_inicial_cents": saldo_inicial_cents,
-            "receitas_recebidas_cents": receitas_recebidas_cents,
-            "receitas_previstas_cents": receitas_previstas_cents,
-            "compromissos_pagos_cents": compromissos_pagos_cents,
-            "compromissos_previstos_cents": compromissos_previstos_cents,
-            "saldo_atual_cents": saldo_atual_cents,
-            "saldo_previsto_cents": saldo_previsto_cents,
-        }
-
     def buscar_compromisso_cartao(
             self,
-            cycle_id: int,
             credit_card_id: int,
             due_date: str,
     ) -> dict | None:
@@ -600,7 +370,6 @@ class BalanceRepository:
             """
             SELECT
                 id,
-                cycle_id,
                 description,
                 expected_amount_cents,
                 actual_amount_cents,
@@ -617,14 +386,12 @@ class BalanceRepository:
                 created_at,
                 updated_at
             FROM finance_balance_commitments
-            WHERE cycle_id = ?
-              AND credit_card_id = ?
+            WHERE credit_card_id = ?
               AND due_date = ?
               AND payment_type = 'credit_card'
             LIMIT 1
             """,
             (
-                cycle_id,
                 credit_card_id,
                 due_date,
             ),
@@ -639,7 +406,6 @@ class BalanceRepository:
 
     def sincronizar_compromisso_cartao(
             self,
-            cycle_id: int,
             credit_card_id: int,
             account_id: int | None,
             description: str,
@@ -650,14 +416,12 @@ class BalanceRepository:
             projection_type: str = "real",
     ) -> int:
         compromisso = self.buscar_compromisso_cartao(
-            cycle_id=cycle_id,
             credit_card_id=credit_card_id,
             due_date=due_date,
         )
 
         if compromisso is None:
             return self.criar_compromisso(
-                cycle_id=cycle_id,
                 description=description,
                 expected_amount_cents=expected_amount_cents,
                 due_date=due_date,
@@ -855,39 +619,3 @@ class BalanceRepository:
         return [dict(row) for row in cursor.fetchall()]
 
         return [dict(row) for row in cursor.fetchall()]
-
-    def buscar_ciclo_por_data(
-            self,
-            data_iso: str,
-    ) -> dict | None:
-        cursor = self.conexao.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                name,
-                start_date,
-                end_date,
-                opening_balance_source,
-                is_active,
-                created_at,
-                updated_at
-            FROM finance_balance_cycles
-            WHERE is_active = 1
-              AND start_date <= ?
-              AND end_date >= ?
-            LIMIT 1
-            """,
-            (
-                data_iso,
-                data_iso,
-            ),
-        )
-
-        row = cursor.fetchone()
-
-        if row is None:
-            return None
-
-        return dict(row)
