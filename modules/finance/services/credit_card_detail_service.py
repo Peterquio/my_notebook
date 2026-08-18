@@ -146,6 +146,7 @@ class CreditCardDetailService:
                 {
                     "type": "expense",
                     "expense_id": lancamento["expense_id"],
+                    "amount_cents": valor_parcela,
                     "category_id": lancamento["category_id"],
                     "installment_number": lancamento["installment_number"],
                     "installment_total": lancamento["installment_total"],

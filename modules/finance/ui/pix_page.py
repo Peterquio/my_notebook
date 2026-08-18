@@ -13,33 +13,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.shared.dashboard.dashboard_grid import (
-    DashboardGrid,
-)
-
-from ui.widgets.card_slot import (
-    CardSlot,
-)
-
-from modules.finance.repositories.finance_category_repository import (
-    FinanceCategoryRepository,
-)
-
-from modules.finance.services.balance_account_service import (
-    BalanceAccountService,
-)
-
-from modules.finance.services.pix_service import (
-    PixService,
-)
-
-from modules.finance.ui.dialogs.pix_transaction_dialog import (
-    PixTransactionDialog,
-)
-
-from modules.finance.ui.widget.pix_transaction_card import (
-    PixTransactionCard,
-)
+from core.shared.dashboard.dashboard_grid import DashboardGrid
+from ui.widgets.card_slot import CardSlot
+from modules.finance.repositories.finance_category_repository import FinanceCategoryRepository
+from modules.finance.services.balance_account_service import BalanceAccountService
+from modules.finance.services.pix_service import PixService
+from modules.finance.ui.dialogs.pix_transaction_dialog import PixTransactionDialog
+from modules.finance.ui.widget.pix_transaction_card import PixTransactionCard
+from modules.finance.services.subscription_service import SubscriptionService
+from modules.finance.services.monthly_bill_service import MonthlyBillService
+from modules.finance.services.recurring_payment_service import RecurringPaymentService
 
 
 class PixPage(QWidget):
@@ -57,6 +40,24 @@ class PixPage(QWidget):
 
         self.pix_service = PixService(
             username
+        )
+
+        self.subscription_service = (
+            SubscriptionService(
+                username
+            )
+        )
+
+        self.monthly_bill_service = (
+            MonthlyBillService(
+                username
+            )
+        )
+
+        self.recurring_payment_service = (
+            RecurringPaymentService(
+                username
+            )
         )
 
         self.account_service = BalanceAccountService(
@@ -729,7 +730,12 @@ class PixPage(QWidget):
 
     def _obter_dados_dialogo(
             self,
-    ) -> tuple[list[dict], list[dict]]:
+    ) -> tuple[
+        list[dict],
+        list[dict],
+        list[dict],
+        list[dict],
+    ]:
 
         accounts = (
             self.account_service
@@ -741,18 +747,35 @@ class PixPage(QWidget):
             .listar_ativas()
         )
 
+        subscriptions = (
+            self.subscription_service
+            .listar_assinaturas(
+                include_inactive=False
+            )
+        )
+
+        monthly_bills = (
+            self.monthly_bill_service
+            .listar_ativas()
+        )
+
         return (
             accounts,
             categories,
+            subscriptions,
+            monthly_bills,
         )
 
     def _novo_pix(
             self,
     ) -> None:
 
-        accounts, categories = (
-            self._obter_dados_dialogo()
-        )
+        (
+            accounts,
+            categories,
+            subscriptions,
+            monthly_bills,
+        ) = self._obter_dados_dialogo()
 
         if not accounts:
             QMessageBox.warning(
@@ -763,17 +786,21 @@ class PixPage(QWidget):
                     "antes de lançar um PIX."
                 ),
             )
+
             return
 
         dialog = PixTransactionDialog(
             accounts=accounts,
             categories=categories,
+            subscriptions=subscriptions,
+            monthly_bills=monthly_bills,
+            contacts=[],
             parent=self,
         )
 
         if (
-            dialog.exec()
-            != QDialog.Accepted
+                dialog.exec()
+                != QDialog.Accepted
         ):
             return
 
@@ -781,42 +808,137 @@ class PixPage(QWidget):
             dialog.obter_dados()
         )
 
+        pix_data = (
+            dados["pix"]
+        )
+
+        classification = (
+            dados["classification"]
+        )
+
         try:
-            self.pix_service.criar_transacao(
-                **dados
+
+            pix_id = (
+                self.pix_service
+                .criar_transacao(
+                    **pix_data
+                )
+            )
+
+            self._registrar_classificacao_pix(
+                pix_id=pix_id,
+                classification=classification,
             )
 
         except ValueError as erro:
+
             QMessageBox.warning(
                 self,
                 "Não foi possível salvar",
                 str(erro),
             )
+
             return
 
         self._carregar_transacoes()
 
         self.data_changed.emit()
 
+    def _registrar_classificacao_pix(
+            self,
+            pix_id: int,
+            classification: dict,
+    ) -> None:
+
+        mode = (
+            classification.get(
+                "mode"
+            )
+        )
+
+        reference_id = (
+            classification.get(
+                "reference_id"
+            )
+        )
+
+        # ---------------------------------------------------------
+        # PIX NORMAL / CONTATO
+        # ---------------------------------------------------------
+
+        if mode in {
+            "simple",
+            "contact",
+        }:
+            return
+
+        # ---------------------------------------------------------
+        # CONTA DO MÊS
+        # ---------------------------------------------------------
+
+        if mode == "monthly_bill":
+
+            if reference_id is None:
+                raise ValueError(
+                    "Conta do mês não informada."
+                )
+
+            self.recurring_payment_service \
+                .marcar_conta_mes_paga_por_pix(
+                monthly_bill_id=reference_id,
+                pix_transaction_id=pix_id,
+            )
+
+            return
+
+        # ---------------------------------------------------------
+        # ASSINATURA
+        # ---------------------------------------------------------
+
+        if mode == "subscription":
+
+            if reference_id is None:
+                raise ValueError(
+                    "Assinatura não informada."
+                )
+
+            self.recurring_payment_service \
+                .marcar_assinatura_paga_por_pix(
+                subscription_id=reference_id,
+                pix_transaction_id=pix_id,
+            )
+
+            return
+
+        raise ValueError(
+            "Classificação de PIX inválida."
+        )
+
     def _editar_pix(
             self,
             transaction_data: dict,
     ) -> None:
 
-        accounts, categories = (
-            self._obter_dados_dialogo()
-        )
+        (
+            accounts,
+            categories,
+            subscriptions,
+            monthly_bills,
+        ) = self._obter_dados_dialogo()
 
         dialog = PixTransactionDialog(
             accounts=accounts,
             categories=categories,
+            subscriptions=subscriptions,
+            monthly_bills=monthly_bills,
+            contacts=[],
             transaction_data=transaction_data,
             parent=self,
         )
 
         if (
-            dialog.exec()
-            != QDialog.Accepted
+                dialog.exec()
+                != QDialog.Accepted
         ):
             return
 
@@ -824,20 +946,50 @@ class PixPage(QWidget):
             dialog.obter_dados()
         )
 
+        pix_data = (
+            dados["pix"]
+        )
+
+        classification = (
+            dados["classification"]
+        )
+
         try:
+
+            # Remove eventual vínculo anterior.
+            #
+            # Isso NÃO exclui PIX nem mexe no saldo.
+            # Remove apenas:
+            #
+            # "este PIX pagou esta assinatura/conta"
+
+            self.recurring_payment_service \
+                .desvincular_pix(
+                transaction_data["id"]
+            )
+
             self.pix_service.atualizar_transacao(
                 transaction_id=(
                     transaction_data["id"]
                 ),
-                **dados,
+                **pix_data,
+            )
+
+            self._registrar_classificacao_pix(
+                pix_id=(
+                    transaction_data["id"]
+                ),
+                classification=classification,
             )
 
         except ValueError as erro:
+
             QMessageBox.warning(
                 self,
                 "Não foi possível atualizar",
                 str(erro),
             )
+
             return
 
         self._carregar_transacoes()
@@ -873,6 +1025,10 @@ class PixPage(QWidget):
 
         if resposta != QMessageBox.Yes:
             return
+
+        self.recurring_payment_service.desvincular_pix(
+            transaction_data["id"]
+        )
 
         try:
             self.pix_service.excluir_transacao(
