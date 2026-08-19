@@ -577,34 +577,77 @@ class CreditCardDetailService:
             installment_number: int,
             installment_total: int,
     ) -> int:
+
         if installment_number < 1:
             raise ValueError(
                 "A parcela atual não pode ser menor que 1."
             )
 
-        if installment_total < installment_number:
+        if (
+                installment_total
+                < installment_number
+        ):
             raise ValueError(
-                "O total de parcelas não pode ser menor que a parcela atual."
+                (
+                    "O total de parcelas não pode "
+                    "ser menor que a parcela atual."
+                )
             )
 
-        parcela_atual_data = date.fromisoformat(
-            effective_purchase_date
+        parcela_atual_data = (
+            date.fromisoformat(
+                effective_purchase_date
+            )
         )
 
-        self.criar_ou_completar_parcelamento(
-            credit_card=credit_card,
-            category_id=category_id,
-            effective_description=effective_description,
-            parcela_atual_data=parcela_atual_data,
-            effective_amount_cents=effective_amount_cents,
-            installment_number=installment_number,
-            installment_total=installment_total,
-            subcategory=subcategory,
-            notes=notes,
-            source_type="manual",
+        installment_group_id = (
+            self.criar_ou_completar_parcelamento(
+                credit_card=credit_card,
+                category_id=category_id,
+                effective_description=(
+                    effective_description
+                ),
+                parcela_atual_data=(
+                    parcela_atual_data
+                ),
+                effective_amount_cents=(
+                    effective_amount_cents
+                ),
+                installment_number=(
+                    installment_number
+                ),
+                installment_total=(
+                    installment_total
+                ),
+                subcategory=subcategory,
+                notes=notes,
+                source_type="manual",
+            )
         )
 
-        return 0
+        parcela = (
+            self.expense_repository
+            .buscar_parcela_grupo(
+                installment_group_id=(
+                    installment_group_id
+                ),
+                installment_number=(
+                    installment_number
+                ),
+            )
+        )
+
+        if parcela is None:
+            raise ValueError(
+                (
+                    "A parcela criada não pôde "
+                    "ser localizada."
+                )
+            )
+
+        return int(
+            parcela["id"]
+        )
 
     def _obter_ou_criar_fatura_por_data(
             self,
@@ -744,7 +787,14 @@ class CreditCardDetailService:
 
         base = menor_parcela_real
 
-        for numero_parcela in range(1, installment_total + 1):
+        primeira_parcela_a_reconciliar = int(
+            menor_parcela_real["installment_number"]
+        )
+
+        for numero_parcela in range(
+                primeira_parcela_a_reconciliar,
+                installment_total + 1,
+        ):
             effective_purchase_date = self._somar_meses(
                 data_primeira_parcela,
                 numero_parcela - 1,

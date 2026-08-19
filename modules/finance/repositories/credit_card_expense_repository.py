@@ -480,13 +480,17 @@ class CreditCardExpenseRepository:
             ),
         )
 
-        melhor_group_id = None
-        menor_diferenca = None
+        candidatos_exatos = []
+        candidatos_fallback = []
 
         for row in cursor.fetchall():
             installment_group_id = row["installment_group_id"]
 
-            base_group_id = installment_group_id.split("|occurrence:", 1)[0]
+            base_group_id = installment_group_id.split(
+                "|occurrence:",
+                1,
+            )[0]
+
             partes = base_group_id.split("|")
 
             if len(partes) < 5:
@@ -505,16 +509,15 @@ class CreditCardExpenseRepository:
             if grupo_credit_card_id != credit_card_id:
                 continue
 
-            if grupo_descricao != descricao_normalizada:
-                continue
-
             if grupo_installment_total != installment_total:
                 continue
 
             if grupo_competencia_primeira != competencia_primeira:
                 continue
 
-            diferenca = abs(grupo_amount_cents - effective_amount_cents)
+            diferenca = abs(
+                grupo_amount_cents - effective_amount_cents
+            )
 
             if diferenca > tolerancia_centavos:
                 continue
@@ -539,14 +542,37 @@ class CreditCardExpenseRepository:
                 ),
             )
 
+            # Já existe uma parcela REAL desse número nesse grupo.
+            # Portanto esta importação não pode pertencer a ele.
             if cursor_verificacao.fetchone() is not None:
                 continue
 
-            if menor_diferenca is None or diferenca < menor_diferenca:
-                menor_diferenca = diferenca
-                melhor_group_id = installment_group_id
+            candidato = (
+                diferenca,
+                installment_group_id,
+            )
 
-        return melhor_group_id
+            if grupo_descricao == descricao_normalizada:
+                candidatos_exatos.append(candidato)
+            else:
+                candidatos_fallback.append(candidato)
+
+        # 1. Sempre prioriza descrição exata.
+        if candidatos_exatos:
+            candidatos_exatos.sort(
+                key=lambda item: item[0]
+            )
+
+            return candidatos_exatos[0][1]
+
+        # 2. Sem descrição exata, somente aceita fallback
+        #    quando há UM ÚNICO grupo possível.
+        if len(candidatos_fallback) == 1:
+            return candidatos_fallback[0][1]
+
+        # Ambíguo: é melhor criar outro grupo do que
+        # misturar dois parcelamentos diferentes.
+        return None
 
     def listar_grupos_parcelados(
             self,
@@ -600,6 +626,34 @@ class CreditCardExpenseRepository:
             dict(row)
             for row in cursor.fetchall()
         ]
+
+    def buscar_parcela_real_referencia_grupo(
+            self,
+            installment_group_id: str,
+    ) -> dict | None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM finance_credit_card_expenses
+            WHERE installment_group_id = ?
+              AND source_type != 'projected_installment'
+              AND status != 'cancelled'
+            ORDER BY
+                installment_number DESC,
+                id DESC
+            LIMIT 1
+            """,
+            (installment_group_id,),
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
 
     def buscar_parcela_grupo(
             self,

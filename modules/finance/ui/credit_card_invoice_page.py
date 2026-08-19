@@ -11,6 +11,18 @@ from PySide6.QtWidgets import (
     QGridLayout,  QSizePolicy,
 )
 
+from modules.finance.services.subscription_service import (
+    SubscriptionService,
+)
+
+from modules.finance.services.monthly_bill_service import (
+    MonthlyBillService,
+)
+
+from modules.finance.services.recurring_payment_service import (
+    RecurringPaymentService,
+)
+
 from modules.finance.services.importers.credit_card_import_service import (
     CreditCardImportService,
 )
@@ -102,6 +114,24 @@ class CreditCardInvoicePage(QWidget):
 
         self.category_service = FinanceCategoryService(
             self.username
+        )
+
+        self.subscription_service = (
+            SubscriptionService(
+                self.username
+            )
+        )
+
+        self.monthly_bill_service = (
+            MonthlyBillService(
+                self.username
+            )
+        )
+
+        self.recurring_payment_service = (
+            RecurringPaymentService(
+                self.username
+            )
         )
 
         self.categories = self.category_service.listar_categorias_ativas()
@@ -1106,56 +1136,101 @@ class CreditCardInvoicePage(QWidget):
 
         self.data_changed.emit()
 
-    def _abrir_dialog_novo_lancamento(self) -> None:
+    def _abrir_dialog_novo_lancamento(
+            self,
+    ) -> None:
+
+        subscriptions = (
+            self.subscription_service
+            .listar_assinaturas(
+                include_inactive=False
+            )
+        )
+
+        monthly_bills = (
+            self.monthly_bill_service
+            .listar_ativas()
+        )
+
         dialog = CreditCardExpenseDialog(
             categories=self.categories,
-            invoice_year=self.invoice_data["invoice_year"],
-            row_data=row_data,
-            mode="edit",
+
+            subscriptions=subscriptions,
+
+            monthly_bills=monthly_bills,
+
+            invoice_year=(
+                self.invoice_data[
+                    "invoice_year"
+                ]
+            ),
+
+            invoice_month=(
+                self.invoice_data[
+                    "invoice_month"
+                ]
+            ),
+
+            row_data=None,
+
+            recurring_payment=None,
+
+            mode="create",
+
             parent=self,
         )
 
-        exclusao_solicitada = {
-            "valor": False
-        }
+        if (
+                dialog.exec()
+                != QDialog.Accepted
+        ):
+            return
 
-        dialog.delete_requested.connect(
-            lambda: exclusao_solicitada.update(
-                valor=True
-            )
+        dados = (
+            dialog.obter_dados()
         )
 
-        resultado = dialog.exec()
+        dados_lancamento = (
+            dados["expense"]
+        )
 
-        if exclusao_solicitada["valor"]:
-            self._excluir_lancamento(
-                row_data=row_data,
-            )
-            return
-
-        if resultado != QDialog.Accepted:
-            return
-
-        dados_lancamento = dialog.obter_dados()
+        recurring = (
+            dados["recurring"]
+        )
 
         try:
-            self.detail_service.criar_lancamento_manual(
-                credit_card=self.credit_card,
-                **dados_lancamento,
+
+            expense_id = (
+                self.detail_service
+                .criar_lancamento_manual(
+                    credit_card=self.credit_card,
+                    **dados_lancamento,
+                )
             )
+
+            self._sincronizar_vinculo_recorrente(
+                expense_id=expense_id,
+                recurring=recurring,
+            )
+
         except Exception as erro:
+
             QMessageBox.warning(
                 self,
                 "Erro ao criar lançamento",
                 str(erro),
             )
+
             return
 
-        self.invoice_data = self._carregar_fatura_selecionada()
+        self.invoice_data = (
+            self._carregar_fatura_selecionada()
+        )
 
         self._sincronizar_fatura_com_saldo()
 
         self._recarregar_tabela()
+
         self.data_changed.emit()
 
     def _editar_lancamento_duplo_clique(
@@ -1179,11 +1254,57 @@ class CreditCardInvoicePage(QWidget):
             self,
             row_data: dict,
     ) -> None:
+
+        expense_id = (
+            row_data[
+                "expense_id"
+            ]
+        )
+
+        subscriptions = (
+            self.subscription_service
+            .listar_assinaturas(
+                include_inactive=False
+            )
+        )
+
+        monthly_bills = (
+            self.monthly_bill_service
+            .listar_ativas()
+        )
+
+        recurring_payment = (
+            self.recurring_payment_service
+            .buscar_pagamento_por_lancamento_cartao(
+                expense_id
+            )
+        )
+
         dialog = CreditCardExpenseDialog(
             categories=self.categories,
-            invoice_year=self.invoice_data["invoice_year"],
+
+            subscriptions=subscriptions,
+
+            monthly_bills=monthly_bills,
+
+            invoice_year=(
+                self.invoice_data[
+                    "invoice_year"
+                ]
+            ),
+
+            invoice_month=(
+                self.invoice_data[
+                    "invoice_month"
+                ]
+            ),
+
             row_data=row_data,
+
+            recurring_payment=recurring_payment,
+
             mode="edit",
+
             parent=self,
         )
 
@@ -1192,25 +1313,47 @@ class CreditCardInvoicePage(QWidget):
         }
 
         dialog.delete_requested.connect(
-            lambda: exclusao_solicitada.update(
+            lambda:
+            exclusao_solicitada.update(
                 valor=True
             )
         )
 
-        resultado = dialog.exec()
+        resultado = (
+            dialog.exec()
+        )
 
-        # IMPORTANTE:
-        # verificar exclusão ANTES de verificar Accepted/Rejected
-        if exclusao_solicitada["valor"]:
+        if (
+                exclusao_solicitada[
+                    "valor"
+                ]
+        ):
             self._excluir_lancamento(
                 row_data=row_data,
             )
+
             return
 
-        if resultado != QDialog.Accepted:
+        if (
+                resultado
+                != QDialog.Accepted
+        ):
             return
 
-        dados_lancamento = dialog.obter_dados()
+        dados = (
+            dialog.obter_dados()
+        )
+
+        dados_lancamento = (
+            dados["expense"]
+        )
+
+        recurring = (
+            dados["recurring"]
+        )
+
+        # Na edição, parcelamento não é
+        # recriado por esse fluxo.
 
         dados_lancamento.pop(
             "installment_number",
@@ -1223,18 +1366,27 @@ class CreditCardInvoicePage(QWidget):
         )
 
         try:
-            self.detail_service.atualizar_lancamento(
+
+            self.detail_service \
+                .atualizar_lancamento(
                 credit_card=self.credit_card,
-                expense_id=row_data["expense_id"],
+                expense_id=expense_id,
                 **dados_lancamento,
             )
 
+            self._sincronizar_vinculo_recorrente(
+                expense_id=expense_id,
+                recurring=recurring,
+            )
+
         except Exception as erro:
+
             QMessageBox.warning(
                 self,
                 "Erro ao editar lançamento",
                 str(erro),
             )
+
             return
 
         self.invoice_data = (
@@ -1246,6 +1398,228 @@ class CreditCardInvoicePage(QWidget):
         self._recarregar_tabela()
 
         self.data_changed.emit()
+
+    def _sincronizar_vinculo_recorrente(
+            self,
+            expense_id: int,
+            recurring: dict,
+    ) -> None:
+
+        if not expense_id:
+            raise ValueError(
+                "O lançamento não possui ID válido."
+            )
+
+        mode = (
+            recurring.get(
+                "mode"
+            )
+        )
+
+        reference_id = (
+            recurring.get(
+                "reference_id"
+            )
+        )
+
+        reference_month = (
+            recurring.get(
+                "reference_month"
+            )
+        )
+
+        reference_year = (
+            recurring.get(
+                "reference_year"
+            )
+        )
+
+        vinculo_atual = (
+            self.recurring_payment_service
+            .buscar_pagamento_por_lancamento_cartao(
+                expense_id
+            )
+        )
+
+        # =====================================================
+        # SIMPLES
+        # =====================================================
+
+        if mode == "simple":
+
+            if vinculo_atual is not None:
+                self.recurring_payment_service \
+                    .desvincular_lancamento_cartao(
+                    expense_id
+                )
+
+            return
+
+        # =====================================================
+        # VALIDAÇÕES
+        # =====================================================
+
+        if reference_id is None:
+            raise ValueError(
+                "Selecione a assinatura ou conta do mês."
+            )
+
+        if reference_month is None:
+            raise ValueError(
+                "Selecione o mês de referência."
+            )
+
+        if reference_year is None:
+            raise ValueError(
+                "Selecione o ano de referência."
+            )
+
+        # =====================================================
+        # VERIFICA SE O VÍNCULO JÁ É EXATAMENTE O MESMO
+        # =====================================================
+
+        if vinculo_atual is not None:
+
+            mesmo_mes = (
+                    int(
+                        vinculo_atual[
+                            "reference_month"
+                        ]
+                    )
+                    == int(
+                reference_month
+            )
+            )
+
+            mesmo_ano = (
+                    int(
+                        vinculo_atual[
+                            "reference_year"
+                        ]
+                    )
+                    == int(
+                reference_year
+            )
+            )
+
+            if mode == "subscription":
+
+                mesmo_item = (
+                        vinculo_atual.get(
+                            "subscription_id"
+                        )
+                        == reference_id
+                )
+
+            elif mode == "monthly_bill":
+
+                mesmo_item = (
+                        vinculo_atual.get(
+                            "monthly_bill_id"
+                        )
+                        == reference_id
+                )
+
+            else:
+
+                raise ValueError(
+                    "Tipo de vínculo inválido."
+                )
+
+            if (
+                    mesmo_item
+                    and mesmo_mes
+                    and mesmo_ano
+            ):
+                return
+
+        # =====================================================
+        # GARANTE QUE O NOVO DESTINO ESTÁ LIVRE
+        # ANTES DE APAGAR O VÍNCULO ANTIGO
+        # =====================================================
+
+        if mode == "subscription":
+
+            pagamento_destino = (
+                self.recurring_payment_service
+                .buscar_pagamento_assinatura_mes(
+                    subscription_id=reference_id,
+                    reference_year=reference_year,
+                    reference_month=reference_month,
+                )
+            )
+
+        elif mode == "monthly_bill":
+
+            pagamento_destino = (
+                self.recurring_payment_service
+                .buscar_pagamento_conta_mes(
+                    monthly_bill_id=reference_id,
+                    reference_year=reference_year,
+                    reference_month=reference_month,
+                )
+            )
+
+        else:
+
+            raise ValueError(
+                "Tipo de vínculo inválido."
+            )
+
+        if (
+                pagamento_destino is not None
+                and (
+                vinculo_atual is None
+                or pagamento_destino["id"]
+                != vinculo_atual["id"]
+        )
+        ):
+            raise ValueError(
+                (
+                    "A assinatura já possui pagamento "
+                    "neste mês."
+                    if mode == "subscription"
+                    else
+                    "A conta do mês já possui pagamento "
+                    "neste mês."
+                )
+            )
+
+        # =====================================================
+        # REMOVE VÍNCULO ANTIGO
+        # =====================================================
+
+        if vinculo_atual is not None:
+            self.recurring_payment_service \
+                .desvincular_lancamento_cartao(
+                expense_id
+            )
+
+        # =====================================================
+        # CRIA NOVO VÍNCULO
+        # =====================================================
+
+        if mode == "subscription":
+            self.recurring_payment_service \
+                .marcar_assinatura_paga_por_cartao(
+                subscription_id=reference_id,
+                credit_card_expense_id=expense_id,
+                reference_year=reference_year,
+                reference_month=reference_month,
+            )
+
+            return
+
+        if mode == "monthly_bill":
+            self.recurring_payment_service \
+                .marcar_conta_mes_paga_por_cartao(
+                monthly_bill_id=reference_id,
+                credit_card_expense_id=expense_id,
+                reference_year=reference_year,
+                reference_month=reference_month,
+            )
+
+            return
 
     def _abrir_dialog_vincular_conta(self) -> None:
         contas = self.balance_account_service.listar_contas()

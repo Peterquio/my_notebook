@@ -242,6 +242,105 @@ class RecurringPaymentService:
         )
 
     # =========================================================
+    # CONTA DO MÊS + CARTÃO
+    # =========================================================
+
+    def marcar_conta_mes_paga_por_cartao(
+            self,
+            monthly_bill_id: int,
+            credit_card_expense_id: int,
+            reference_year: int,
+            reference_month: int,
+            notes: str | None = None,
+    ) -> int:
+
+        conta = (
+            self.monthly_bill_repository
+            .buscar_por_id(
+                monthly_bill_id
+            )
+        )
+
+        if conta is None:
+            raise ValueError(
+                "Conta do mês não encontrada."
+            )
+
+        lancamento = (
+            self.credit_card_expense_repository
+            .buscar_por_id(
+                credit_card_expense_id
+            )
+        )
+
+        if lancamento is None:
+            raise ValueError(
+                "Lançamento do cartão não encontrado."
+            )
+
+        self._validar_referencia(
+            reference_year,
+            reference_month,
+        )
+
+        self._garantir_conta_mes_nao_paga(
+            monthly_bill_id=monthly_bill_id,
+            reference_year=reference_year,
+            reference_month=reference_month,
+        )
+
+        self._garantir_lancamento_cartao_disponivel(
+            credit_card_expense_id
+        )
+
+        return self.repository.criar(
+            subscription_id=None,
+
+            monthly_bill_id=monthly_bill_id,
+
+            reference_year=reference_year,
+            reference_month=reference_month,
+
+            payment_source=(
+                self.SOURCE_CREDIT_CARD
+            ),
+
+            pix_transaction_id=None,
+
+            credit_card_expense_id=(
+                credit_card_expense_id
+            ),
+
+            paid_amount_cents=int(
+                lancamento[
+                    "effective_amount_cents"
+                ]
+            ),
+
+            paid_date=(
+                lancamento[
+                    "effective_purchase_date"
+                ]
+            ),
+
+            notes=self._normalizar_texto(
+                notes
+            ),
+        )
+
+    def buscar_pagamento_por_lancamento_cartao(
+            self,
+            credit_card_expense_id: int,
+    ) -> dict | None:
+
+        return (
+            self.repository
+            .buscar_por_lancamento_cartao(
+                credit_card_expense_id
+            )
+        )
+
+    # =========================================================
     # CONTA DO MÊS + PIX
     # =========================================================
 

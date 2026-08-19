@@ -334,16 +334,42 @@ class CreditCardImportService:
                 else:
                     installment_group_id = familia_base
 
+            effective_category_id = category_id
+            effective_description = expense.description
+            effective_subcategory = None
+
+            if installment_group_id is not None:
+                parcela_referencia = (
+                    self.expense_repository
+                    .buscar_parcela_real_referencia_grupo(
+                        installment_group_id=installment_group_id,
+                    )
+                )
+
+                if parcela_referencia is not None:
+                    effective_category_id = (
+                        parcela_referencia["category_id"]
+                    )
+
+                    effective_description = (
+                        parcela_referencia["effective_description"]
+                    )
+
+                    effective_subcategory = (
+                        parcela_referencia.get("subcategory")
+                    )
+
             self.expense_repository.criar_lancamento(
                 credit_card_id=credit_card["id"],
                 invoice_id=invoice_id,
-                category_id=category_id,
-                effective_description=expense.description,
+                category_id=effective_category_id,
+                effective_description=effective_description,
                 effective_purchase_date=expense.purchase_date.isoformat(),
                 billing_date=closing_date.isoformat(),
                 installment_number=expense.installment_number,
                 installment_total=expense.installment_total,
                 effective_amount_cents=expense.amount_cents,
+                subcategory=effective_subcategory,
                 installment_group_id=installment_group_id,
                 import_batch_id=batch_id,
                 created_by="csv_import",
