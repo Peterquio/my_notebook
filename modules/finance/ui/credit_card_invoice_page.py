@@ -1178,6 +1178,8 @@ class CreditCardInvoicePage(QWidget):
             mode="create",
 
             parent=self,
+
+            username=self.username,
         )
 
         if (
@@ -1306,6 +1308,8 @@ class CreditCardInvoicePage(QWidget):
             mode="edit",
 
             parent=self,
+
+            username=self.username,
         )
 
         exclusao_solicitada = {

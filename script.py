@@ -1,6 +1,5 @@
-import sqlite3
-import shutil
 from pathlib import Path
+import sqlite3
 from datetime import datetime
 
 
@@ -8,355 +7,461 @@ DB_PATH = Path(
     r"C:\dev\Outros\my_notebook\user_data\users\default.db"
 )
 
-CREDIT_CARD_ID = 1
-INVOICE_YEAR = 2026
-INVOICE_MONTH = 9
+OUTPUT_PATH = DB_PATH.with_name(
+    f"dump_banco_{datetime.now():%Y%m%d_%H%M%S}.txt"
+)
+
+
+def linha(tamanho=100):
+    return "=" * tamanho
+
+
+def escrever_tabela(
+        arquivo,
+        conexao,
+        tabela: str,
+) -> None:
+
+    cursor = conexao.cursor()
+
+    arquivo.write("\n")
+    arquivo.write(linha())
+    arquivo.write(f"\nTABELA: {tabela}\n")
+    arquivo.write(linha())
+    arquivo.write("\n")
+
+    # =========================================================
+    # ESTRUTURA
+    # =========================================================
+
+    arquivo.write("\nESTRUTURA\n")
+    arquivo.write("-" * 100)
+    arquivo.write("\n")
+
+    cursor.execute(
+        f'PRAGMA table_info("{tabela}")'
+    )
+
+    colunas = cursor.fetchall()
+
+    for coluna in colunas:
+        arquivo.write(
+            f"{coluna['name']:<35} "
+            f"{coluna['type']:<20} "
+            f"nullable={'NO' if coluna['notnull'] else 'YES'} "
+            f"default={coluna['dflt_value']} "
+            f"pk={coluna['pk']}\n"
+        )
+
+    # =========================================================
+    # ÍNDICES
+    # =========================================================
+
+    arquivo.write("\nÍNDICES\n")
+    arquivo.write("-" * 100)
+    arquivo.write("\n")
+
+    cursor.execute(
+        f'PRAGMA index_list("{tabela}")'
+    )
+
+    indices = cursor.fetchall()
+
+    if not indices:
+        arquivo.write("Nenhum índice.\n")
+
+    for indice in indices:
+        arquivo.write(
+            f"{indice['name']} | "
+            f"unique={indice['unique']} | "
+            f"origin={indice['origin']}\n"
+        )
+
+        cursor.execute(
+            f'PRAGMA index_info("{indice["name"]}")'
+        )
+
+        for coluna_indice in cursor.fetchall():
+            arquivo.write(
+                f"    - {coluna_indice['name']}\n"
+            )
+
+    # =========================================================
+    # DADOS
+    # =========================================================
+
+    arquivo.write("\nDADOS\n")
+    arquivo.write("-" * 100)
+    arquivo.write("\n")
+
+    cursor.execute(
+        f'SELECT COUNT(*) AS total FROM "{tabela}"'
+    )
+
+    total = cursor.fetchone()["total"]
+
+    arquivo.write(
+        f"TOTAL DE REGISTROS: {total}\n\n"
+    )
+
+    if total == 0:
+        return
+
+    cursor.execute(
+        f'SELECT * FROM "{tabela}"'
+    )
+
+    registros = cursor.fetchall()
+
+    nomes_colunas = [
+        descricao[0]
+        for descricao in cursor.description
+    ]
+
+    for numero, registro in enumerate(
+        registros,
+        start=1,
+    ):
+
+        arquivo.write(
+            f"\n--- REGISTRO {numero} ---\n"
+        )
+
+        for nome in nomes_colunas:
+
+            valor = registro[nome]
+
+            arquivo.write(
+                f"{nome:<35}: {valor}\n"
+            )
+
+
+def escrever_resumo_cartoes(
+        arquivo,
+        conexao,
+) -> None:
+
+    cursor = conexao.cursor()
+
+    arquivo.write("\n\n")
+    arquivo.write(linha())
+    arquivo.write("\nRESUMO DE FATURAS DE CARTÃO\n")
+    arquivo.write(linha())
+    arquivo.write("\n")
+
+    cursor.execute(
+        """
+        SELECT
+            c.id AS credit_card_id,
+            c.name AS credit_card_name,
+            i.id AS invoice_id,
+            i.invoice_year,
+            i.invoice_month,
+
+            COUNT(e.id) AS total_lancamentos,
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN e.status != 'cancelled'
+                        THEN e.effective_amount_cents
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS total_expenses_cents
+
+        FROM finance_credit_cards c
+
+        LEFT JOIN finance_credit_card_invoices i
+            ON i.credit_card_id = c.id
+
+        LEFT JOIN finance_credit_card_expenses e
+            ON e.invoice_id = i.id
+
+        GROUP BY
+            c.id,
+            c.name,
+            i.id,
+            i.invoice_year,
+            i.invoice_month
+
+        ORDER BY
+            c.id,
+            i.invoice_year,
+            i.invoice_month
+        """
+    )
+
+    for row in cursor.fetchall():
+
+        valor = (
+            row["total_expenses_cents"]
+            or 0
+        ) / 100
+
+        arquivo.write(
+            f"Cartão {row['credit_card_id']} "
+            f"| {row['credit_card_name']} "
+            f"| Fatura {row['invoice_month']:02d}/"
+            f"{row['invoice_year']} "
+            f"| invoice_id={row['invoice_id']} "
+            f"| lançamentos={row['total_lancamentos']} "
+            f"| despesas=R$ {valor:.2f}\n"
+        )
+
+
+def escrever_resumo_parcelamentos(
+        arquivo,
+        conexao,
+) -> None:
+
+    cursor = conexao.cursor()
+
+    arquivo.write("\n\n")
+    arquivo.write(linha())
+    arquivo.write("\nRESUMO DE INSTALLMENT GROUPS\n")
+    arquivo.write(linha())
+    arquivo.write("\n")
+
+    cursor.execute(
+        """
+        SELECT
+            installment_group_id,
+            COUNT(*) AS total_registros,
+            COUNT(
+                CASE
+                    WHEN status != 'cancelled'
+                    THEN 1
+                END
+            ) AS ativos,
+
+            MIN(installment_number) AS menor_parcela,
+            MAX(installment_number) AS maior_parcela,
+            MAX(installment_total) AS total_parcelas
+
+        FROM finance_credit_card_expenses
+
+        WHERE installment_group_id IS NOT NULL
+
+        GROUP BY installment_group_id
+
+        ORDER BY installment_group_id
+        """
+    )
+
+    grupos = cursor.fetchall()
+
+    for grupo in grupos:
+
+        arquivo.write("\n")
+        arquivo.write("-" * 100)
+        arquivo.write("\n")
+
+        arquivo.write(
+            f"GROUP ID: "
+            f"{grupo['installment_group_id']}\n"
+        )
+
+        arquivo.write(
+            f"Registros: {grupo['total_registros']} "
+            f"| Ativos: {grupo['ativos']} "
+            f"| Parcelas: "
+            f"{grupo['menor_parcela']}.."
+            f"{grupo['maior_parcela']}"
+            f"/{grupo['total_parcelas']}\n\n"
+        )
+
+        cursor.execute(
+            """
+            SELECT
+                e.id,
+                e.installment_number,
+                e.installment_total,
+                e.original_description,
+                e.effective_description,
+                e.original_purchase_date,
+                e.effective_purchase_date,
+                e.original_amount_cents,
+                e.effective_amount_cents,
+                e.source_type,
+                e.source_reference,
+                e.import_batch_id,
+                e.created_by,
+                e.status,
+                e.notes,
+                i.invoice_year,
+                i.invoice_month
+
+            FROM finance_credit_card_expenses e
+
+            INNER JOIN finance_credit_card_invoices i
+                ON i.id = e.invoice_id
+
+            WHERE e.installment_group_id = ?
+
+            ORDER BY
+                e.installment_number,
+                i.invoice_year,
+                i.invoice_month,
+                e.id
+            """,
+            (
+                grupo["installment_group_id"],
+            ),
+        )
+
+        for parcela in cursor.fetchall():
+
+            valor = (
+                parcela["effective_amount_cents"]
+                or 0
+            ) / 100
+
+            arquivo.write(
+                f"ID {parcela['id']:<5} "
+                f"| {parcela['installment_number']:02d}/"
+                f"{parcela['installment_total']:02d} "
+                f"| FATURA "
+                f"{parcela['invoice_month']:02d}/"
+                f"{parcela['invoice_year']} "
+                f"| DATA "
+                f"{parcela['effective_purchase_date']} "
+                f"| R$ {valor:.2f} "
+                f"| source={parcela['source_type']} "
+                f"| status={parcela['status']}\n"
+            )
+
+            arquivo.write(
+                f"    original_desc : "
+                f"{parcela['original_description']}\n"
+            )
+
+            arquivo.write(
+                f"    effective_desc: "
+                f"{parcela['effective_description']}\n"
+            )
+
+            arquivo.write(
+                f"    original_date : "
+                f"{parcela['original_purchase_date']}\n"
+            )
+
+            arquivo.write(
+                f"    source_ref    : "
+                f"{parcela['source_reference']}\n"
+            )
+
+            arquivo.write(
+                f"    import_batch  : "
+                f"{parcela['import_batch_id']}\n"
+            )
+
+            arquivo.write(
+                f"    created_by    : "
+                f"{parcela['created_by']}\n"
+            )
+
+            arquivo.write(
+                f"    notes         : "
+                f"{parcela['notes']}\n"
+            )
 
 
 def main():
+
     if not DB_PATH.exists():
         raise FileNotFoundError(
-            f"Banco não encontrado:\n{DB_PATH}"
+            f"Banco não encontrado: {DB_PATH}"
         )
 
-    # ---------------------------------------------------------
-    # BACKUP
-    # ---------------------------------------------------------
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    backup_path = DB_PATH.with_name(
-        f"{DB_PATH.stem}_backup_limpeza_setembro_{timestamp}.db"
+    conexao = sqlite3.connect(
+        DB_PATH
     )
 
-    shutil.copy2(
-        DB_PATH,
-        backup_path,
-    )
-
-    print("=" * 70)
-    print("LIMPEZA DA FATURA 09/2026")
-    print("=" * 70)
-    print()
-    print(f"Banco : {DB_PATH}")
-    print(f"Backup: {backup_path}")
-    print()
-
-    conexao = sqlite3.connect(DB_PATH)
     conexao.row_factory = sqlite3.Row
 
     try:
-        cursor = conexao.cursor()
 
-        # -----------------------------------------------------
-        # LOCALIZA FATURA
-        # -----------------------------------------------------
-        cursor.execute(
-            """
-            SELECT id
-            FROM finance_credit_card_invoices
-            WHERE credit_card_id = ?
-              AND invoice_year = ?
-              AND invoice_month = ?
-            """,
-            (
-                CREDIT_CARD_ID,
-                INVOICE_YEAR,
-                INVOICE_MONTH,
-            ),
-        )
+        with OUTPUT_PATH.open(
+            "w",
+            encoding="utf-8",
+        ) as arquivo:
 
-        invoice = cursor.fetchone()
-
-        if invoice is None:
-            raise ValueError(
-                "Fatura 09/2026 não encontrada."
+            arquivo.write(
+                "DUMP DIAGNÓSTICO DO MY NOTEBOOK\n"
             )
 
-        invoice_id = int(invoice["id"])
-
-        print(f"Fatura encontrada: ID {invoice_id}")
-        print()
-
-        # -----------------------------------------------------
-        # LOCALIZA IMPORTAÇÕES CSV DE SETEMBRO
-        # -----------------------------------------------------
-        cursor.execute(
-            """
-            SELECT
-                id,
-                import_batch_id,
-                installment_group_id,
-                effective_description,
-                installment_number,
-                installment_total
-            FROM finance_credit_card_expenses
-            WHERE credit_card_id = ?
-              AND invoice_id = ?
-              AND created_by = 'csv_import'
-            """,
-            (
-                CREDIT_CARD_ID,
-                invoice_id,
-            ),
-        )
-
-        importados = [
-            dict(row)
-            for row in cursor.fetchall()
-        ]
-
-        if not importados:
-            print(
-                "Nenhum lançamento CSV encontrado "
-                "na fatura de setembro."
-            )
-            return
-
-        batch_ids = {
-            row["import_batch_id"]
-            for row in importados
-            if row["import_batch_id"] is not None
-        }
-
-        grupos_importados = {
-            row["installment_group_id"]
-            for row in importados
-            if row["installment_group_id"]
-        }
-
-        print(
-            f"Lançamentos CSV encontrados: "
-            f"{len(importados)}"
-        )
-
-        print(
-            f"Lotes encontrados: "
-            f"{sorted(batch_ids)}"
-        )
-
-        print(
-            f"Grupos parcelados envolvidos: "
-            f"{len(grupos_importados)}"
-        )
-
-        # -----------------------------------------------------
-        # MOSTRA MANUAIS QUE SERÃO PRESERVADOS
-        # -----------------------------------------------------
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS total
-            FROM finance_credit_card_expenses
-            WHERE credit_card_id = ?
-              AND invoice_id = ?
-              AND (
-                    created_by IS NULL
-                    OR created_by != 'csv_import'
-                  )
-              AND status != 'cancelled'
-            """,
-            (
-                CREDIT_CARD_ID,
-                invoice_id,
-            ),
-        )
-
-        total_preservados = int(
-            cursor.fetchone()["total"]
-        )
-
-        print(
-            f"Lançamentos não importados preservados: "
-            f"{total_preservados}"
-        )
-
-        # -----------------------------------------------------
-        # CONTA PROJEÇÕES CONTAMINADAS
-        # -----------------------------------------------------
-        total_projecoes = 0
-
-        if grupos_importados:
-            placeholders = ",".join(
-                "?"
-                for _ in grupos_importados
+            arquivo.write(
+                f"Banco: {DB_PATH}\n"
             )
 
-            cursor.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM finance_credit_card_expenses
-                WHERE credit_card_id = ?
-                  AND source_type = 'projected_installment'
-                  AND installment_group_id IN ({placeholders})
-                """,
-                (
-                    CREDIT_CARD_ID,
-                    *grupos_importados,
-                ),
+            arquivo.write(
+                f"Gerado em: "
+                f"{datetime.now():%d/%m/%Y %H:%M:%S}\n"
             )
 
-            total_projecoes = int(
-                cursor.fetchone()["total"]
-            )
+            cursor = conexao.cursor()
 
-        print(
-            f"Projeções ligadas a esses grupos: "
-            f"{total_projecoes}"
-        )
-
-        print()
-        print("-" * 70)
-        print("EXECUTANDO LIMPEZA")
-        print("-" * 70)
-
-        conexao.execute("BEGIN")
-
-        # -----------------------------------------------------
-        # 1. APAGA TODAS AS PROJEÇÕES DOS GRUPOS TOCADOS
-        #
-        # Inclui projeções antigas, futuras, ativas ou canceladas.
-        # Não toca em parcelas reais.
-        # -----------------------------------------------------
-        if grupos_importados:
-            placeholders = ",".join(
-                "?"
-                for _ in grupos_importados
-            )
-
-            cursor.execute(
-                f"""
-                DELETE FROM finance_credit_card_expenses
-                WHERE credit_card_id = ?
-                  AND source_type = 'projected_installment'
-                  AND installment_group_id IN ({placeholders})
-                """,
-                (
-                    CREDIT_CARD_ID,
-                    *grupos_importados,
-                ),
-            )
-
-            print(
-                f"Projeções removidas: "
-                f"{cursor.rowcount}"
-            )
-
-        # -----------------------------------------------------
-        # 2. APAGA OS LANÇAMENTOS CSV DA FATURA DE SETEMBRO
-        # -----------------------------------------------------
-        cursor.execute(
-            """
-            DELETE FROM finance_credit_card_expenses
-            WHERE credit_card_id = ?
-              AND invoice_id = ?
-              AND created_by = 'csv_import'
-            """,
-            (
-                CREDIT_CARD_ID,
-                invoice_id,
-            ),
-        )
-
-        print(
-            f"Lançamentos CSV removidos: "
-            f"{cursor.rowcount}"
-        )
-
-        # -----------------------------------------------------
-        # 3. REMOVE OS LOTES QUE FICARAM SEM LANÇAMENTOS
-        # -----------------------------------------------------
-        lotes_removidos = 0
-
-        for batch_id in batch_ids:
             cursor.execute(
                 """
-                SELECT COUNT(*) AS total
-                FROM finance_credit_card_expenses
-                WHERE import_batch_id = ?
-                """,
-                (batch_id,),
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                  AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+                """
             )
 
-            restante = int(
-                cursor.fetchone()["total"]
+            tabelas = [
+                row["name"]
+                for row in cursor.fetchall()
+            ]
+
+            arquivo.write(
+                f"Tabelas encontradas: "
+                f"{len(tabelas)}\n"
             )
 
-            if restante == 0:
-                cursor.execute(
-                    """
-                    DELETE FROM finance_credit_card_import_batches
-                    WHERE id = ?
-                    """,
-                    (batch_id,),
+            for tabela in tabelas:
+                escrever_tabela(
+                    arquivo=arquivo,
+                    conexao=conexao,
+                    tabela=tabela,
                 )
 
-                lotes_removidos += cursor.rowcount
+            # =================================================
+            # RESUMOS ESPECÍFICOS DO FINANCEIRO
+            # =================================================
 
-        print(
-            f"Lotes de importação removidos: "
-            f"{lotes_removidos}"
-        )
+            if (
+                "finance_credit_card_expenses"
+                in tabelas
+            ):
 
-        conexao.commit()
+                escrever_resumo_parcelamentos(
+                    arquivo=arquivo,
+                    conexao=conexao,
+                )
 
-        # -----------------------------------------------------
-        # CONFERÊNCIA
-        # -----------------------------------------------------
-        print()
-        print("-" * 70)
-        print("CONFERÊNCIA")
-        print("-" * 70)
+            if (
+                "finance_credit_cards"
+                in tabelas
+                and
+                "finance_credit_card_invoices"
+                in tabelas
+            ):
 
-        cursor.execute(
-            """
-            SELECT
-                created_by,
-                source_type,
-                status,
-                COUNT(*) AS total
-            FROM finance_credit_card_expenses
-            WHERE credit_card_id = ?
-              AND invoice_id = ?
-            GROUP BY
-                created_by,
-                source_type,
-                status
-            ORDER BY
-                created_by,
-                source_type,
-                status
-            """,
-            (
-                CREDIT_CARD_ID,
-                invoice_id,
-            ),
-        )
-
-        rows = cursor.fetchall()
-
-        if not rows:
-            print("Fatura ficou sem lançamentos.")
-        else:
-            for row in rows:
-                print(
-                    f"created_by={row['created_by']} | "
-                    f"source_type={row['source_type']} | "
-                    f"status={row['status']} | "
-                    f"total={row['total']}"
+                escrever_resumo_cartoes(
+                    arquivo=arquivo,
+                    conexao=conexao,
                 )
 
         print()
-        print("=" * 70)
-        print("LIMPEZA CONCLUÍDA")
-        print("=" * 70)
-        print()
-        print(
-            "Agora pode abrir o My Notebook "
-            "e importar novamente a fatura de setembro."
-        )
-
-    except Exception:
-        conexao.rollback()
-        raise
+        print("=" * 80)
+        print("DUMP GERADO COM SUCESSO")
+        print("=" * 80)
+        print(OUTPUT_PATH)
 
     finally:
         conexao.close()

@@ -20,6 +20,10 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QFrame,
 )
 
 from ui.widgets.date_line_edit import (
@@ -30,6 +34,9 @@ from modules.finance.ui.widget.category_combo_box import (
     CategoryComboBox,
 )
 
+from modules.finance.services.credit_card_detail_service import (
+    CreditCardDetailService,
+)
 
 class CreditCardExpenseDialog(QDialog):
     delete_requested = Signal()
@@ -45,6 +52,7 @@ class CreditCardExpenseDialog(QDialog):
             monthly_bills: list[dict],
             invoice_year: int,
             invoice_month: int,
+            username: str,
             row_data: dict | None = None,
             recurring_payment: dict | None = None,
             mode: str = "edit",
@@ -64,6 +72,13 @@ class CreditCardExpenseDialog(QDialog):
         self.recurring_payment = recurring_payment
 
         self.mode = mode
+        self.username = username
+
+        self.detail_service = CreditCardDetailService(
+            username=username
+        )
+
+        self.detalhes_expandidos = False
 
         self.setWindowTitle(
             (
@@ -91,19 +106,40 @@ class CreditCardExpenseDialog(QDialog):
             self,
     ) -> None:
 
-        layout = QVBoxLayout(
+        layout_principal = QHBoxLayout(
             self
         )
 
+        layout_principal.setContentsMargins(
+            22,
+            20,
+            22,
+            20,
+        )
+
+        layout_principal.setSpacing(
+            18
+        )
+
+        self.editor_container = QWidget()
+
+        layout = QVBoxLayout(
+            self.editor_container
+        )
+
         layout.setContentsMargins(
-            22,
-            20,
-            22,
-            20,
+            0,
+            0,
+            0,
+            0,
         )
 
         layout.setSpacing(
             12
+        )
+
+        layout_principal.addWidget(
+            self.editor_container
         )
 
         form = QFormLayout()
@@ -444,6 +480,23 @@ class CreditCardExpenseDialog(QDialog):
 
         botoes.addStretch()
 
+        if (
+            self.mode == "edit"
+            and self.row_data
+            and self.row_data.get("installment_group_id")
+        ):
+            self.expandir_button = QPushButton(
+                "Parcelamento →"
+            )
+
+            self.expandir_button.clicked.connect(
+                self._alternar_detalhes_parcelamento
+            )
+
+            botoes.addWidget(
+                self.expandir_button
+            )
+
         cancelar = QPushButton(
             "Cancelar"
         )
@@ -479,6 +532,255 @@ class CreditCardExpenseDialog(QDialog):
         layout.addLayout(
             botoes
         )
+
+        self._montar_painel_parcelamento(
+            layout_principal
+        )
+
+    # =========================================================
+    # DIAGNÓSTICO DO PARCELAMENTO
+    # =========================================================
+
+    def _montar_painel_parcelamento(
+            self,
+            layout_principal: QHBoxLayout,
+    ) -> None:
+
+        self.parcelamento_panel = QFrame()
+
+        self.parcelamento_panel.setObjectName(
+            "InstallmentPanel"
+        )
+
+        self.parcelamento_panel.setMinimumWidth(
+            680
+        )
+
+        painel_layout = QVBoxLayout(
+            self.parcelamento_panel
+        )
+
+        titulo = QLabel(
+            "Detalhes do parcelamento"
+        )
+
+        titulo.setObjectName(
+            "InstallmentTitle"
+        )
+
+        painel_layout.addWidget(
+            titulo
+        )
+
+        self.installment_group_label = QLabel()
+
+        self.installment_group_label.setWordWrap(
+            True
+        )
+
+        self.installment_group_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+
+        painel_layout.addWidget(
+            self.installment_group_label
+        )
+
+        self.installment_table = QTableWidget()
+
+        self.installment_table.setColumnCount(
+            8
+        )
+
+        self.installment_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Parcela",
+                "Fatura",
+                "Data",
+                "Valor",
+                "Origem",
+                "Status",
+                "Descrição",
+            ]
+        )
+
+        self.installment_table.setEditTriggers(
+            QTableWidget.NoEditTriggers
+        )
+
+        self.installment_table.setSelectionBehavior(
+            QTableWidget.SelectRows
+        )
+
+        self.installment_table.verticalHeader().setVisible(
+            False
+        )
+
+        header = self.installment_table.horizontalHeader()
+
+        header.setSectionResizeMode(
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            7,
+            QHeaderView.Stretch
+        )
+
+        painel_layout.addWidget(
+            self.installment_table
+        )
+
+        self.parcelamento_panel.setVisible(
+            False
+        )
+
+        layout_principal.addWidget(
+            self.parcelamento_panel
+        )
+
+    def _alternar_detalhes_parcelamento(
+            self,
+    ) -> None:
+
+        self.detalhes_expandidos = (
+            not self.detalhes_expandidos
+        )
+
+        self.parcelamento_panel.setVisible(
+            self.detalhes_expandidos
+        )
+
+        if self.detalhes_expandidos:
+
+            self.expandir_button.setText(
+                "Parcelamento ←"
+            )
+
+            self._carregar_detalhes_parcelamento()
+
+            self.resize(
+                1280,
+                max(
+                    self.height(),
+                    650,
+                ),
+            )
+
+        else:
+
+            self.expandir_button.setText(
+                "Parcelamento →"
+            )
+
+            self.resize(
+                520,
+                self.height(),
+            )
+
+    def _carregar_detalhes_parcelamento(
+            self,
+    ) -> None:
+
+        expense_id = self.row_data.get(
+            "expense_id"
+        )
+
+        diagnostico = (
+            self.detail_service
+            .carregar_diagnostico_parcelamento(
+                expense_id=expense_id
+            )
+        )
+
+        self.installment_table.setRowCount(
+            0
+        )
+
+        if not diagnostico:
+            self.installment_group_label.setText(
+                "Parcelamento não encontrado."
+            )
+            return
+
+        group_id = diagnostico[
+            "installment_group_id"
+        ]
+
+        self.installment_group_label.setText(
+            f"Group ID: {group_id}"
+        )
+
+        selected_id = diagnostico[
+            "selected_expense_id"
+        ]
+
+        parcelas = diagnostico[
+            "parcelas"
+        ]
+
+        self.installment_table.setRowCount(
+            len(parcelas)
+        )
+
+        for row, parcela in enumerate(
+            parcelas
+        ):
+
+            valor = (
+                parcela["effective_amount_cents"]
+                / 100
+            )
+
+            valores = [
+                str(parcela["id"]),
+
+                (
+                    f"{int(parcela['installment_number']):02d}/"
+                    f"{int(parcela['installment_total']):02d}"
+                ),
+
+                (
+                    f"{int(parcela['invoice_month']):02d}/"
+                    f"{int(parcela['invoice_year'])}"
+                ),
+
+                parcela["effective_purchase_date"],
+
+                (
+                    f"R$ {valor:,.2f}"
+                    .replace(",", "X")
+                    .replace(".", ",")
+                    .replace("X", ".")
+                ),
+
+                parcela.get("source_type") or "-",
+
+                parcela.get("status") or "-",
+
+                parcela.get(
+                    "effective_description"
+                ) or "-",
+            ]
+
+            for column, value in enumerate(
+                valores
+            ):
+                item = QTableWidgetItem(
+                    value
+                )
+
+                if parcela["id"] == selected_id:
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+
+                self.installment_table.setItem(
+                    row,
+                    column,
+                    item,
+                )
 
     # =========================================================
     # RECORRÊNCIA
@@ -1236,6 +1538,27 @@ class CreditCardExpenseDialog(QDialog):
 
             QPushButton#DangerButton:hover {
                 background-color: #fecaca;
+            }
+            
+                        QFrame#InstallmentPanel {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+            }
+
+            QLabel#InstallmentTitle {
+                color: #0f172a;
+                font-size: 15px;
+                font-weight: 700;
+            }
+
+            QTableWidget {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                color: #0f172a;
+                font-size: 12px;
             }
             """
         )

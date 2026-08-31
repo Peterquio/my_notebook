@@ -296,6 +296,38 @@ class CreditCardDetailService:
 
         return f"{dia}/{mes}"
 
+    def carregar_diagnostico_parcelamento(
+            self,
+            expense_id: int,
+    ) -> dict | None:
+
+        lancamento = self.expense_repository.buscar_por_id(
+            expense_id
+        )
+
+        if lancamento is None:
+            return None
+
+        installment_group_id = lancamento.get(
+            "installment_group_id"
+        )
+
+        if not installment_group_id:
+            return None
+
+        parcelas = (
+            self.expense_repository
+            .listar_diagnostico_parcelas_grupo(
+                installment_group_id=installment_group_id
+            )
+        )
+
+        return {
+            "installment_group_id": installment_group_id,
+            "selected_expense_id": expense_id,
+            "parcelas": parcelas,
+        }
+
     def atualizar_categoria_lancamento(
             self,
             expense_id: int,
@@ -729,12 +761,6 @@ class CreditCardDetailService:
             invoice_month: int,
     ) -> None:
 
-        self.expense_repository.cancelar_projecoes_parcelamento_cartao(
-            credit_card_id=credit_card["id"],
-            invoice_year=invoice_year,
-            invoice_month=invoice_month,
-        )
-
         grupos = self.expense_repository.listar_grupos_parcelados(
             credit_card_id=credit_card["id"],
         )
@@ -743,6 +769,8 @@ class CreditCardDetailService:
             self._reconciliar_grupo_parcelado(
                 credit_card=credit_card,
                 installment_group_id=installment_group_id,
+                reference_invoice_year=invoice_year,
+                reference_invoice_month=invoice_month,
             )
 
     def _reconciliar_grupo_parcelado(
@@ -750,6 +778,7 @@ class CreditCardDetailService:
             credit_card: dict,
             installment_group_id: str,
     ) -> None:
+
         parcelas = self.expense_repository.listar_parcelas_grupo(
             installment_group_id=installment_group_id,
         )
@@ -757,64 +786,163 @@ class CreditCardDetailService:
         if not parcelas:
             return
 
+        parcelas_reais = [
+            parcela
+            for parcela in parcelas
+            if parcela["source_type"] != "projected_installment"
+        ]
+
+        if not parcelas_reais:
+            return
+
         installment_total = max(
             parcela["installment_total"]
-            for parcela in parcelas
+            for parcela in parcelas_reais
         )
 
         if installment_total <= 1:
             return
 
-        parcelas_por_numero = {
-            parcela["installment_number"]: parcela
-            for parcela in parcelas
-            if parcela["source_type"] != "projected_installment"
-        }
-
-        menor_parcela_real = min(
-            parcelas_por_numero.values(),
+        maior_parcela_real = max(
+            parcelas_reais,
             key=lambda parcela: parcela["installment_number"],
         )
 
-        data_menor_parcela_real = date.fromisoformat(
-            menor_parcela_real["effective_purchase_date"]
-        )
+        maior_numero_real = maior_parcela_real["installment_number"]
 
-        data_primeira_parcela = self._somar_meses(
-            data_menor_parcela_real,
-            -(menor_parcela_real["installment_number"] - 1),
-        )
+        # =========================================================
+        # O REAL É VERDADE ABSOLUTA
+        #
+        # Qualquer projeção da parcela atual ou de parcelas
+        # anteriores deixa de fazer sentido.
+        # =========================================================
 
-        base = menor_parcela_real
+        for numero_parcela in range(1, maior_numero_real + 1):
+            self.expense_repository.cancelar_projecoes_ativas_grupo_parcela(
+                installment_group_id=installment_group_id,
+                installment_number=numero_parcela,
+            )
 
-        primeira_parcela_a_reconciliar = int(
-            menor_parcela_real["installment_number"]
-        )
+        # =========================================================
+        # PARCELAMENTO TERMINOU
+        # =========================================================
+
+        if maior_numero_real >= installment_total:
+            return
+
+        # =========================================================
+        # PROCURA UMA PROJEÇÃO FUTURA EXISTENTE
+        #
+        # Ela é nossa melhor referência da programação ORIGINAL.
+        #
+        # Isso é importante para antecipações:
+        #
+        # 7/10 -> setembro
+        # 8/10 -> setembro (adiantada)
+        #
+        # A 9/10 já projetada para novembro NÃO deve virar outubro
+        # só porque a 8/10 caiu antecipadamente em setembro.
+        # =========================================================
+
+        projecoes_futuras = [
+            parcela
+            for parcela in parcelas
+            if (
+                    parcela["source_type"] == "projected_installment"
+                    and parcela["status"] != "cancelled"
+                    and parcela["installment_number"] > maior_numero_real
+            )
+        ]
+
+        ancora_projecao = None
+
+        if projecoes_futuras:
+            ancora_projecao = min(
+                projecoes_futuras,
+                key=lambda parcela: parcela["installment_number"],
+            )
+
+        # =========================================================
+        # BASE VISUAL / FINANCEIRA
+        #
+        # Categoria, descrição e valor vêm da última parcela real.
+        # =========================================================
+
+        base = maior_parcela_real
 
         for numero_parcela in range(
-                primeira_parcela_a_reconciliar,
+                maior_numero_real + 1,
                 installment_total + 1,
         ):
-            effective_purchase_date = self._somar_meses(
-                data_primeira_parcela,
-                numero_parcela - 1,
+
+            # -----------------------------------------------------
+            # Se já existe projeção ativa desta parcela,
+            # NÃO reconstruímos.
+            #
+            # Mantemos exatamente a competência prevista.
+            # -----------------------------------------------------
+
+            projecao_existente = (
+                self.expense_repository
+                .buscar_projecao_ativa_grupo_parcela(
+                    installment_group_id=installment_group_id,
+                    installment_number=numero_parcela,
+                )
             )
 
-            invoice_id, closing_date = self._obter_ou_criar_fatura_por_data(
-                credit_card=credit_card,
-                purchase_date=effective_purchase_date,
+            if projecao_existente is not None:
+                continue
+
+            # -----------------------------------------------------
+            # Determinação da data prevista
+            # -----------------------------------------------------
+
+            if ancora_projecao is not None:
+
+                data_ancora = date.fromisoformat(
+                    ancora_projecao["effective_purchase_date"]
+                )
+
+                deslocamento = (
+                        numero_parcela
+                        - ancora_projecao["installment_number"]
+                )
+
+                effective_purchase_date = self._somar_meses(
+                    data_ancora,
+                    deslocamento,
+                )
+
+            else:
+
+                # Não existe nenhuma projeção anterior para preservar.
+                #
+                # Isso normalmente acontece na primeira vez que o
+                # parcelamento entra no sistema.
+                #
+                # Nesse caso começamos a projeção a partir da
+                # última parcela real conhecida.
+
+                data_ultima_real = date.fromisoformat(
+                    maior_parcela_real["effective_purchase_date"]
+                )
+
+                deslocamento = (
+                        numero_parcela
+                        - maior_numero_real
+                )
+
+                effective_purchase_date = self._somar_meses(
+                    data_ultima_real,
+                    deslocamento,
+                )
+
+            invoice_id, closing_date = (
+                self._obter_ou_criar_fatura_por_data(
+                    credit_card=credit_card,
+                    purchase_date=effective_purchase_date,
+                )
             )
-
-            parcela_existente = parcelas_por_numero.get(numero_parcela)
-
-            if parcela_existente:
-                continue
-
-            if self.expense_repository.fatura_possui_importacao_csv(
-                    credit_card_id=credit_card["id"],
-                    invoice_id=invoice_id,
-            ):
-                continue
 
             self.expense_repository.criar_lancamento(
                 credit_card_id=credit_card["id"],
@@ -828,15 +956,11 @@ class CreditCardDetailService:
                 installment_group_id=installment_group_id,
                 effective_amount_cents=base["effective_amount_cents"],
                 import_batch_id=None,
-                subcategory=base.get("subcategory"),
                 created_by="reconcile_installment",
                 notes="Parcela projetada automaticamente",
                 original_description=base["original_description"],
-                original_purchase_date=(
-                    base["original_purchase_date"]
-                    or base["effective_purchase_date"]
-                ),
-                original_amount_cents=base["effective_amount_cents"],
+                original_purchase_date=base["original_purchase_date"],
+                original_amount_cents=base["original_amount_cents"],
                 source_type="projected_installment",
                 source_reference=installment_group_id,
             )

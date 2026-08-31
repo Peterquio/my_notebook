@@ -17,6 +17,9 @@ from modules.finance.ui.dialogs.finance_category_manager_dialog import (
     FinanceCategoryManagerDialog,
 )
 
+from modules.finance.ui.credit_card_debug_window import (
+    CreditCardDebugWindow,
+)
 
 class FinanceSettingsPage(QWidget):
     def __init__(
@@ -64,6 +67,10 @@ class FinanceSettingsPage(QWidget):
 
         layout.addWidget(
             self._criar_card_periodo_financeiro()
+        )
+
+        layout.addWidget(
+            self._criar_card_diagnostico_faturas()
         )
 
         layout.addStretch()
@@ -139,6 +146,54 @@ class FinanceSettingsPage(QWidget):
         )
 
         dialog.exec()
+
+    def _criar_card_diagnostico_faturas(self) -> QFrame:
+        card = QFrame()
+
+        layout = QVBoxLayout(card)
+
+        titulo = QLabel(
+            "Diagnóstico de Faturas"
+        )
+
+        titulo.setStyleSheet(
+            """
+            font-weight: 700;
+            font-size: 15px;
+            """
+        )
+
+        descricao = QLabel(
+            "Inspecione grupos de parcelamento, "
+            "faturas, lançamentos órfãos e "
+            "inconsistências do cartão."
+        )
+
+        descricao.setWordWrap(
+            True
+        )
+
+        botao = QPushButton(
+            "Abrir diagnóstico"
+        )
+
+        botao.clicked.connect(
+            self._abrir_diagnostico_faturas
+        )
+
+        layout.addWidget(titulo)
+        layout.addWidget(descricao)
+        layout.addWidget(botao)
+
+        return card
+
+    def _abrir_diagnostico_faturas(self) -> None:
+        janela = CreditCardDebugWindow(
+            username=self.username,
+            parent=self,
+        )
+
+        janela.exec()
 
     def _criar_card_periodo_financeiro(self) -> QFrame:
         card = QFrame()

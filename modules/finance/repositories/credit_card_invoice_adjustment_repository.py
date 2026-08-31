@@ -83,41 +83,53 @@ class CreditCardInvoiceAdjustmentRepository:
 
         return int(row["total_cents"] or 0)
 
-    def existe_ajuste_importado(
+    def listar_ajustes_importados_fatura(
             self,
             credit_card_id: int,
-            description: str,
-            adjustment_date: str,
-            amount_cents: int,
-            source_type: str | None,
-            source_reference: str | None,
-    ) -> bool:
+            invoice_id: int,
+    ) -> list[dict]:
         cursor = self.conexao.cursor()
 
         cursor.execute(
             """
-            SELECT 1
+            SELECT *
             FROM finance_credit_card_invoice_adjustments
             WHERE credit_card_id = ?
-              AND description = ?
-              AND adjustment_date = ?
-              AND amount_cents = ?
-              AND source_type = ?
-              AND source_reference = ?
+              AND invoice_id = ?
               AND status != 'cancelled'
-            LIMIT 1
+              AND notes LIKE 'Ajuste importado via CSV%'
+            ORDER BY id ASC
             """,
             (
                 credit_card_id,
-                description,
-                adjustment_date,
-                amount_cents,
-                source_type,
-                source_reference,
+                invoice_id,
             ),
         )
 
-        return cursor.fetchone() is not None
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
+
+    def cancelar_ajuste_importado(
+            self,
+            adjustment_id: int,
+    ) -> None:
+        cursor = self.conexao.cursor()
+
+        cursor.execute(
+            """
+            UPDATE finance_credit_card_invoice_adjustments
+            SET
+                status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status != 'cancelled'
+            """,
+            (adjustment_id,),
+        )
+
+        self.conexao.commit()
 
     def listar_ajustes_fatura(
             self,

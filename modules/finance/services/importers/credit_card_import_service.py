@@ -359,27 +359,60 @@ class CreditCardImportService:
                         parcela_referencia.get("subcategory")
                     )
 
-            self.expense_repository.criar_lancamento(
-                credit_card_id=credit_card["id"],
-                invoice_id=invoice_id,
-                category_id=effective_category_id,
-                effective_description=effective_description,
-                effective_purchase_date=expense.purchase_date.isoformat(),
-                billing_date=closing_date.isoformat(),
-                installment_number=expense.installment_number,
-                installment_total=expense.installment_total,
-                effective_amount_cents=expense.amount_cents,
-                subcategory=effective_subcategory,
-                installment_group_id=installment_group_id,
-                import_batch_id=batch_id,
-                created_by="csv_import",
-                notes=f"Importado via CSV - {expense.source}",
-                original_description=expense.raw_title,
-                original_purchase_date=expense.purchase_date.isoformat(),
-                original_amount_cents=expense.amount_cents,
-                source_type=expense.source,
-                source_reference=expense.raw_title,
-            )
+            parcela_real_existente = None
+
+            if installment_group_id is not None:
+                parcela_real_existente = (
+                    self.expense_repository
+                    .buscar_parcela_real_grupo_numero(
+                        installment_group_id=installment_group_id,
+                        installment_number=expense.installment_number,
+                    )
+                )
+
+            if parcela_real_existente is not None:
+                self.expense_repository.atualizar_lancamento_importado(
+                    expense_id=parcela_real_existente["id"],
+                    invoice_id=invoice_id,
+                    effective_purchase_date=expense.purchase_date.isoformat(),
+                    billing_date=closing_date.isoformat(),
+                    effective_amount_cents=expense.amount_cents,
+                    original_description=expense.raw_title,
+                    original_purchase_date=expense.purchase_date.isoformat(),
+                    original_amount_cents=expense.amount_cents,
+                    source_type=expense.source,
+                    source_reference=expense.raw_title,
+                    import_batch_id=batch_id,
+                )
+
+            else:
+                self.expense_repository.criar_lancamento(
+                    credit_card_id=credit_card["id"],
+                    invoice_id=invoice_id,
+                    category_id=effective_category_id,
+                    effective_description=effective_description,
+                    effective_purchase_date=expense.purchase_date.isoformat(),
+                    billing_date=closing_date.isoformat(),
+                    installment_number=expense.installment_number,
+                    installment_total=expense.installment_total,
+                    effective_amount_cents=expense.amount_cents,
+                    subcategory=effective_subcategory,
+                    installment_group_id=installment_group_id,
+                    import_batch_id=batch_id,
+                    created_by="csv_import",
+                    notes=f"Importado via CSV - {expense.source}",
+                    original_description=expense.raw_title,
+                    original_purchase_date=expense.purchase_date.isoformat(),
+                    original_amount_cents=expense.amount_cents,
+                    source_type=expense.source,
+                    source_reference=expense.raw_title,
+                )
+
+            if installment_group_id is not None:
+                self.expense_repository.cancelar_projecoes_ativas_grupo_parcela(
+                    installment_group_id=installment_group_id,
+                    installment_number=expense.installment_number,
+                )
 
             ja_importados_agora[assinatura] += 1
             total_salvo += 1
@@ -404,23 +437,15 @@ class CreditCardImportService:
 
         total_salvo = 0
 
+        adjustments_por_fatura = defaultdict(list)
+
         for adjustment in adjustments:
-            invoice_year, invoice_month = self.invoice_service.calcular_mes_fatura(
-                purchase_date=adjustment.adjustment_date,
-                closing_day=credit_card["closing_day"],
+            invoice_year, invoice_month = (
+                self.invoice_service.calcular_mes_fatura(
+                    purchase_date=adjustment.adjustment_date,
+                    closing_day=credit_card["closing_day"],
+                )
             )
-
-            adjustment_key = (
-                adjustment.adjustment_date.isoformat(),
-                adjustment.description,
-                adjustment.amount_cents,
-                adjustment.raw_title,
-            )
-
-            adjustment_type = adjustment.adjustment_type
-
-            if adjustment_key in previous_payment_keys:
-                adjustment_type = "previous_invoice_payment"
 
             invoice_id = self._obter_ou_criar_fatura(
                 credit_card=credit_card,
@@ -428,29 +453,115 @@ class CreditCardImportService:
                 invoice_month=invoice_month,
             )
 
-            if self.adjustment_repository.existe_ajuste_importado(
+            adjustments_por_fatura[invoice_id].append(
+                adjustment
+            )
+
+        for invoice_id, csv_adjustments in adjustments_por_fatura.items():
+
+            existentes = (
+                self.adjustment_repository
+                .listar_ajustes_importados_fatura(
                     credit_card_id=credit_card["id"],
+                    invoice_id=invoice_id,
+                )
+            )
+
+            existentes_por_assinatura = defaultdict(list)
+
+            for existente in existentes:
+                assinatura = (
+                    existente["adjustment_date"],
+                    existente["description"],
+                    existente["amount_cents"],
+                    existente["source_type"],
+                    existente["source_reference"],
+                    existente["adjustment_type"],
+                )
+
+                existentes_por_assinatura[assinatura].append(
+                    existente
+                )
+
+            usados_por_assinatura = defaultdict(int)
+
+            for adjustment in csv_adjustments:
+
+                adjustment_key = (
+                    adjustment.adjustment_date.isoformat(),
+                    adjustment.description,
+                    adjustment.amount_cents,
+                    adjustment.raw_title,
+                )
+
+                adjustment_type = adjustment.adjustment_type
+
+                if adjustment_key in previous_payment_keys:
+                    adjustment_type = "previous_invoice_payment"
+
+                assinatura = (
+                    adjustment.adjustment_date.isoformat(),
+                    adjustment.description,
+                    adjustment.amount_cents,
+                    adjustment.source,
+                    adjustment.raw_title,
+                    adjustment_type,
+                )
+
+                existentes_assinatura = (
+                    existentes_por_assinatura.get(
+                        assinatura,
+                        [],
+                    )
+                )
+
+                indice_usado = usados_por_assinatura[assinatura]
+
+                if indice_usado < len(existentes_assinatura):
+                    usados_por_assinatura[assinatura] += 1
+                    continue
+
+                self.adjustment_repository.criar_ajuste(
+                    credit_card_id=credit_card["id"],
+                    invoice_id=invoice_id,
+                    adjustment_type=adjustment_type,
                     description=adjustment.description,
-                    adjustment_date=adjustment.adjustment_date.isoformat(),
+                    adjustment_date=(
+                        adjustment.adjustment_date.isoformat()
+                    ),
                     amount_cents=adjustment.amount_cents,
                     source_type=adjustment.source,
                     source_reference=adjustment.raw_title,
+                    notes=(
+                        f"Ajuste importado via CSV - "
+                        f"{adjustment.source}"
+                    ),
+                )
+
+                usados_por_assinatura[assinatura] += 1
+                total_salvo += 1
+
+            for assinatura, registros in (
+                    existentes_por_assinatura.items()
             ):
-                continue
+                quantidade_csv = (
+                    usados_por_assinatura.get(
+                        assinatura,
+                        0,
+                    )
+                )
 
-            self.adjustment_repository.criar_ajuste(
-                credit_card_id=credit_card["id"],
-                invoice_id=invoice_id,
-                adjustment_type=adjustment_type,
-                description=adjustment.description,
-                adjustment_date=adjustment.adjustment_date.isoformat(),
-                amount_cents=adjustment.amount_cents,
-                source_type=adjustment.source,
-                source_reference=adjustment.raw_title,
-                notes=f"Ajuste importado via CSV - {adjustment.source}",
-            )
+                if len(registros) <= quantidade_csv:
+                    continue
 
-            total_salvo += 1
+                excedentes = registros[
+                    quantidade_csv:
+                ]
+
+                for registro in excedentes:
+                    self.adjustment_repository.cancelar_ajuste_importado(
+                        adjustment_id=registro["id"],
+                    )
 
         return total_salvo
 

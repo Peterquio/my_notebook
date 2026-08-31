@@ -1,0 +1,42 @@
+
+================================================================================
+[2026-08-31 10:15:08.083] INÍCIO DA SESSÃO
+================================================================================
+Usuário: default
+Arquivo: C:\dev\Outros\my_notebook\user_data\logs\default_260831_10-15.txt
+
+================================================================================
+[2026-08-31 10:15:08.119] INÍCIO DE AUDITORIA
+================================================================================
+Tipo: GLOBAL
+Identificador: CREDIT_CARD_DATABASE
+
+================================================================================
+[2026-08-31 10:15:08.126] PROBLEMA DETECTADO
+================================================================================
+Código: DUPLICATE_INSTALLMENTS
+Descrição: 2 ocorrência(s)
+
+DADOS
+--------------------------------------------------------------------------------
+[{'installment_group_id': '1|mercado*curtocircuito|3103|3|2026-08',
+  'installment_number': 1,
+  'total_rows': 2,
+  'active_rows': 2,
+  'expense_ids': '3365,3554',
+  'statuses': 'pending,pending',
+  'source_types': 'Nubank,Nubank'},
+ {'installment_group_id': '1|mercadolivre*curtocir|5244|10|2026-08',
+  'installment_number': 1,
+  'total_rows': 2,
+  'active_rows': 2,
+  'expense_ids': '3364,3552',
+  'statuses': 'pending,pending',
+  'source_types': 'Nubank,Nubank'}]
+
+================================================================================
+[2026-08-31 10:15:08.127] FIM DE AUDITORIA
+================================================================================
+Tipo: GLOBAL
+Identificador: CREDIT_CARD_DATABASE
+Problemas encontrados: 2
